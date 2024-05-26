@@ -1,0 +1,27 @@
+{
+  "recipes": [
+    {
+      "input": ["WATER",1000],
+      "output1": ["HYDROGEN",100],
+      "output2": ["OXYGEN",100]
+    },
+    {
+      "input": ["HEAVYWATER",1000],
+      "output1": ["DEUTERIUM",50],
+      "output2": ["OXYGEN",50]
+    },
+    {
+      "input": ["POTASSIUM_CHLORIDE",250],
+      "output1": ["CHLORINE",125],
+      "output2": ["NONE",0],
+      "byproducts": [
+        ["hbm:item.dust"]
+      ]
+    },
+    {
+      "input": ["CALCIUM_CHLORIDE",250],
+      "output1": ["CHLORINE",125],
+      "output2": ["CALCIUM_SOLUTION",125]
+    }
+  ]
+}

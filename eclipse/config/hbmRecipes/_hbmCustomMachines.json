@@ -1,0 +1,23 @@
+{
+  "recipes": [
+    {
+      "recipeKey": "paperPress",
+      "recipes": [
+        {
+          "inputFluids": [
+            ["WATER",250]
+          ],
+          "inputItems": [
+            ["item","hbm:item.powder_sawdust"]
+          ],
+          "outputFluids": [],
+          "outputItems": [
+            ["minecraft:paper",3,1.0]
+          ],
+          "duration": 60,
+          "consumptionPerTick": 10
+        }
+      ]
+    }
+  ]
+}

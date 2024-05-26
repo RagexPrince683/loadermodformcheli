@@ -1,0 +1,25 @@
+DisplayName = Kh-25ML
+Type = ASMissile
+radius = 800
+Power = 600
+Acceleration = 4.5
+Explosion = 5
+Flaming = true
+Sight = MoveSight
+Delay = 5
+Round = 2
+ReloadTime = 200
+Sound = missile_2_snd
+
+DamageFactor = tank, 2.0
+DamageFactor = plane, 2.5
+DamageFactor = vehicle 2.5
+DamageFactor = heli, 2.5
+DamageFactor = player, 20.0
+
+
+MaxAmmo = 8
+SuppliedNum = 4
+Item =  2, iron_ingot
+Item =  2, gunpowder
+Item =  2, redstone

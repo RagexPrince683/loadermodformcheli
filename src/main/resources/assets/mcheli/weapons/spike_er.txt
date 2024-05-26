@@ -1,0 +1,28 @@
+DisplayName = SPIKE-ER Anti-Tank Missile
+Type = ATMissile
+Power = 1000
+;radius=8000
+accuracy = 1.0
+DamageFactor = tank, 1.0
+DamageFactor = plane, 3.0
+DamageFactor = vehicle 2.0
+DamageFactor = heli, 3.0
+Acceleration = 1.7
+Explosion = 5
+Flaming = true
+Sight = MoveSight
+Delay = 100
+ReloadTime = 240
+ModelBullet = agm114
+Sound = missile_1_snd
+
+Delay = 100
+ReloadTime = 240
+;Acceleration = 7.0
+
+
+MaxAmmo = 4
+SuppliedNum = 2
+Item =  1, iron_ingot
+Item =  1, gunpowder
+Item =  1, redstone

@@ -1,0 +1,42 @@
+DisplayName = Kh-59ME
+Type = ASMissile
+Power = 720
+Acceleration = 3.2
+Explosion = 20
+Flaming = true
+Sight = MoveSight
+ModelBullet = agm84
+Sound = missile_1_snd
+DelayFuse = 10
+Delay = 5
+ReloadTime = 140
+Round = 2
+Radius = 90
+
+RigidityTime = 15
+RidableOnly = false
+
+
+TrajectoryParticle = largesmoke
+
+
+
+
+
+
+
+ExplosionBlock = 5
+ExplosionInWater = 0
+
+
+DamageFactor = tank, 2.0
+DamageFactor = plane, 4.5
+DamageFactor = vehicle 4.5
+DamageFactor = heli, 4.5
+DamageFactor = player, 20.0
+
+MaxAmmo = 2
+SuppliedNum = 2
+Item =  2, iron_ingot
+Item =  2, gunpowder
+Item =  2, redstone

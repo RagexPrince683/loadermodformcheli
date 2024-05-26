@@ -1,0 +1,26 @@
+DisplayName = MIM-23 HAWK
+Type = AAMissile
+Power = 58
+Acceleration = 4.0
+Explosion = 5
+Sight = MissileSight
+Delay = 6
+ReloadTime = 120
+Round = 3
+SoundVolume = 15
+SoundPitch = 0.8
+Sound = aimnine
+LockTime = 14
+ProximityFuseDist = 1
+ModelBullet = mim23missile
+
+DamageFactor = tank, 1.5
+DamageFactor = plane, 3.0
+DamageFactor = vehicle 2.0
+DamageFactor = heli, 3.0
+
+MaxAmmo = 3
+SuppliedNum = 3
+Item =  4, iron_ingot
+Item =  5, gunpowder
+Item =  3, redstone
