@@ -34,6 +34,7 @@ public class mcheliloader {
 
     @Mod.EventHandler
     public void PreInit(FMLPreInitializationEvent evt) {
+        //Logger logger = LogManager.getLogger(mcheliloader.class.getName());
         try {
             File configDir = evt.getModConfigurationDirectory();
             File minecraftDir = configDir.getParentFile();
@@ -44,9 +45,9 @@ public class mcheliloader {
             if (!Files.exists(mcheliDir)) {
                 //assets need to go into mods/mcheli/assets/mcheli
                 //code needs to go into mods/mcheli/mcheli
-                Files.createDirectory(mcheliDir);
+                Files.createDirectories(mcheliDir);
                 if(!Files.exists(mcheliAssetsDir)) {
-                    Files.createDirectory(mcheliAssetsDir);
+                    Files.createDirectories(mcheliAssetsDir);
                 }
 
             }
