@@ -87,7 +87,7 @@ public class mcheliloader {
         int attempt = 0;
         while (attempt < MAX_RETRIES) {
             try (InputStream is = jarFile.getInputStream(entry)) {
-                Files.createDirectories(targetPath.getParent());
+                Files.createDirectories(targetPath.getParent()); // Ensure parent directories are created
                 Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
                 LOGGER.debug("Copied file: " + entry.getName() + " to " + targetPath);
                 return;
@@ -96,7 +96,13 @@ public class mcheliloader {
                 LOGGER.warn("Retry " + attempt + " for copying file: " + entry.getName() + " to " + targetPath, e);
                 if (attempt >= MAX_RETRIES) {
                     LOGGER.error("Failed to copy file after " + MAX_RETRIES + " attempts: " + entry.getName() + " to " + targetPath, e);
-                    throw e;
+                    throw e; // Rethrow the exception if max retries are reached
+                }
+                // Introduce a delay between retries
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                    LOGGER.error("Retry delay interrupted", ie);
                 }
             }
         }
