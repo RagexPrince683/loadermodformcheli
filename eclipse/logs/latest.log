@@ -1,12 +1,2 @@
-[04:22:29] [main/INFO]: Setting user: Player899
-[04:22:31] [Client thread/INFO]: LWJGL Version: 2.9.1
-[04:22:41] [Client thread/INFO]: Reloading ResourceManager: Default, FMLFileResourcePack:Forge Mod Loader, FMLFileResourcePack:Minecraft Forge, FMLFileResourcePack:Not Enough Items, FMLFileResourcePack:Flan's Mod Ultimate, FMLFileResourcePack:Hbm's Nuclear Tech
-[04:22:42] [Client thread/INFO]: Reloading ResourceManager: Default, FMLFileResourcePack:Forge Mod Loader, FMLFileResourcePack:Minecraft Forge, FMLFileResourcePack:Not Enough Items, FMLFileResourcePack:Flan's Mod Ultimate, FMLFileResourcePack:Hbm's Nuclear Tech
-[04:22:51] [Sound Library Loader/INFO]: Sound engine started
-[04:22:51] [Client thread/INFO]: Created: 16x16 textures/blocks-atlas
-[04:22:51] [Client thread/INFO]: Created: 16x16 textures/items-atlas
-[04:22:52] [Client thread/INFO]: Reloading ResourceManager: Default, FMLFileResourcePack:Forge Mod Loader, FMLFileResourcePack:Minecraft Forge, FMLFileResourcePack:Not Enough Items, FMLFileResourcePack:Flan's Mod Ultimate, FMLFileResourcePack:Hbm's Nuclear Tech
-[04:22:53] [Client thread/INFO]: Created: 1024x1024 textures/blocks-atlas
-[04:22:53] [Client thread/INFO]: Created: 1024x1024 textures/items-atlas
-[04:22:54] [Sound Library Loader/INFO]: Sound engine started
-[04:22:59] [Client thread/INFO]: Stopping!
+[05:12:16] [main/INFO]: Setting user: Player891
+[05:12:18] [Client thread/INFO]: LWJGL Version: 2.9.1
