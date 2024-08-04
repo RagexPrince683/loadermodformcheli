@@ -2,15 +2,17 @@ package com.Ragex.mcheliloader;
 
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
-import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Enumeration;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 @Mod(
         modid = "mcheliloader",
@@ -18,9 +20,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
         dependencies = "required-after:Forge@[10.13.2.1230,)"
 )
 public class mcheliloader {
-    private static final Path ASSET_SOURCE_DIR = Paths.get("assets/mcheli");
-    private static final Path CODE_SOURCE_DIR = Paths.get("code/mcheli");
-
     private static final Logger LOGGER = LogManager.getLogger(mcheliloader.class.getName());
 
     @Mod.EventHandler
@@ -35,11 +34,11 @@ public class mcheliloader {
 
             createDirectories(mcheliDir, mcheliAssetsDir, mcheliCodeDir);
 
-            copyDirectory(CODE_SOURCE_DIR, mcheliCodeDir);
-            copyDirectory(ASSET_SOURCE_DIR, mcheliAssetsDir);
+            copyDirectoryFromJar("/assets/mcheli", mcheliAssetsDir);
+            copyDirectoryFromJar("/code/mcheli", mcheliCodeDir);
 
-            validateFiles(CODE_SOURCE_DIR, mcheliCodeDir);
-            validateFiles(ASSET_SOURCE_DIR, mcheliAssetsDir);
+            validateFiles("/assets/mcheli", mcheliAssetsDir);
+            validateFiles("/code/mcheli", mcheliCodeDir);
 
         } catch (Exception e) {
             LOGGER.error("An error occurred during pre-initialization.", e);
@@ -55,28 +54,39 @@ public class mcheliloader {
         }
     }
 
-    private void copyDirectory(Path sourceDir, Path targetDir) throws IOException {
-        Files.walkFileTree(sourceDir, new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                Path targetFile = targetDir.resolve(sourceDir.relativize(file));
-                Files.copy(file, targetFile, StandardCopyOption.REPLACE_EXISTING);
-                LOGGER.debug("Copied file: " + file + " to " + targetFile);
-                return FileVisitResult.CONTINUE;
-            }
+    private void copyDirectoryFromJar(String sourceDir, Path targetDir) throws IOException {
+        try (ZipFile jarFile = new ZipFile(new File(getClass().getProtectionDomain().getCodeSource().getLocation().getPath()))) {
+            Enumeration<? extends ZipEntry> entries = jarFile.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                if (entry.getName().startsWith(sourceDir)) {
+                    Path entryPath = Paths.get(entry.getName());
+                    Path targetPath = targetDir.resolve(Paths.get(entry.getName().substring(sourceDir.length())));
 
-            @Override
-            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                if (exc != null) {
-                    throw exc;
+                    if (entry.isDirectory()) {
+                        Files.createDirectories(targetPath);
+                    } else {
+                        try (InputStream is = jarFile.getInputStream(entry)) {
+                            Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                        }
+                    }
+                    LOGGER.debug("Copied file: " + entry.getName() + " to " + targetPath);
                 }
-                return FileVisitResult.CONTINUE;
             }
-        });
+        }
     }
 
-    private void validateFiles(Path sourceDir, Path targetDir) throws IOException {
-        long originalFiles = Files.walk(sourceDir).filter(Files::isRegularFile).count();
+    private void validateFiles(String sourceDir, Path targetDir) throws IOException {
+        long originalFiles = 0;
+        try (ZipFile jarFile = new ZipFile(new File(getClass().getProtectionDomain().getCodeSource().getLocation().getPath()))) {
+            Enumeration<? extends ZipEntry> entries = jarFile.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                if (entry.getName().startsWith(sourceDir) && !entry.isDirectory()) {
+                    originalFiles++;
+                }
+            }
+        }
         long copiedFiles = Files.walk(targetDir).filter(Files::isRegularFile).count();
 
         if (originalFiles != copiedFiles) {
