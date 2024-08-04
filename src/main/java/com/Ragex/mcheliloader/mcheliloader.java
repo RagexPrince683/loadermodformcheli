@@ -8,6 +8,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Enumeration;
@@ -34,11 +35,11 @@ public class mcheliloader {
 
             createDirectories(mcheliDir, mcheliAssetsDir, mcheliCodeDir);
 
-            copyDirectoryFromJar("/assets/mcheli", mcheliAssetsDir);
-            copyDirectoryFromJar("/code/mcheli", mcheliCodeDir);
+            copyDirectoryFromJar("assets/mcheli", mcheliAssetsDir);
+            copyDirectoryFromJar("code/mcheli", mcheliCodeDir);
 
-            validateFiles("/assets/mcheli", mcheliAssetsDir);
-            validateFiles("/code/mcheli", mcheliCodeDir);
+            validateFiles("assets/mcheli", mcheliAssetsDir);
+            validateFiles("code/mcheli", mcheliCodeDir);
 
         } catch (Exception e) {
             LOGGER.error("An error occurred during pre-initialization.", e);
@@ -54,31 +55,43 @@ public class mcheliloader {
         }
     }
 
-    private void copyDirectoryFromJar(String sourceDir, Path targetDir) throws IOException {
-        try (ZipFile jarFile = new ZipFile(new File(getClass().getProtectionDomain().getCodeSource().getLocation().getPath()))) {
+    private void copyDirectoryFromJar(String sourceDir, Path targetDir) throws IOException, URISyntaxException {
+        // Remove leading slash if present
+        if (sourceDir.startsWith("/")) {
+            sourceDir = sourceDir.substring(1);
+        }
+        try (ZipFile jarFile = new ZipFile(new File(getClass().getProtectionDomain().getCodeSource().getLocation().toURI()))) {
             Enumeration<? extends ZipEntry> entries = jarFile.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
                 if (entry.getName().startsWith(sourceDir)) {
-                    Path entryPath = Paths.get(entry.getName());
-                    Path targetPath = targetDir.resolve(Paths.get(entry.getName().substring(sourceDir.length())));
+                    String relativePath = entry.getName().substring(sourceDir.length());
+                    Path targetPath = targetDir.resolve(relativePath).normalize();
 
                     if (entry.isDirectory()) {
                         Files.createDirectories(targetPath);
                     } else {
                         try (InputStream is = jarFile.getInputStream(entry)) {
+                            Files.createDirectories(targetPath.getParent());
                             Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
                         }
                     }
                     LOGGER.debug("Copied file: " + entry.getName() + " to " + targetPath);
                 }
             }
+        } catch (Exception e) {
+            LOGGER.error("Failed to copy directory from jar: " + sourceDir, e);
+            throw new IOException("Failed to copy directory from jar: " + sourceDir, e);
         }
     }
 
-    private void validateFiles(String sourceDir, Path targetDir) throws IOException {
+    private void validateFiles(String sourceDir, Path targetDir) throws IOException, URISyntaxException {
         long originalFiles = 0;
-        try (ZipFile jarFile = new ZipFile(new File(getClass().getProtectionDomain().getCodeSource().getLocation().getPath()))) {
+        // Remove leading slash if present
+        if (sourceDir.startsWith("/")) {
+            sourceDir = sourceDir.substring(1);
+        }
+        try (ZipFile jarFile = new ZipFile(new File(getClass().getProtectionDomain().getCodeSource().getLocation().toURI()))) {
             Enumeration<? extends ZipEntry> entries = jarFile.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
