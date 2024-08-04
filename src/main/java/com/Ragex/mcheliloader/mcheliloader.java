@@ -74,6 +74,9 @@ public class mcheliloader {
                         try (InputStream is = jarFile.getInputStream(entry)) {
                             Files.createDirectories(targetPath.getParent());
                             Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                        } catch (IOException e) {
+                            LOGGER.error("Failed to copy file: " + entry.getName() + " to " + targetPath, e);
+                            throw e;
                         }
                     }
                     LOGGER.debug("Copied file: " + entry.getName() + " to " + targetPath);
