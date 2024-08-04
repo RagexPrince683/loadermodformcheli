@@ -22,6 +22,7 @@ import java.util.zip.ZipFile;
 )
 public class mcheliloader {
     private static final Logger LOGGER = LogManager.getLogger(mcheliloader.class.getName());
+    private static final int MAX_RETRIES = 30;
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -71,20 +72,33 @@ public class mcheliloader {
                     if (entry.isDirectory()) {
                         Files.createDirectories(targetPath);
                     } else {
-                        try (InputStream is = jarFile.getInputStream(entry)) {
-                            Files.createDirectories(targetPath.getParent());
-                            Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
-                        } catch (IOException e) {
-                            LOGGER.error("Failed to copy file: " + entry.getName() + " to " + targetPath, e);
-                            throw e;
-                        }
+                        copyFileWithRetries(jarFile, entry, targetPath);
                     }
-                    LOGGER.debug("Copied file: " + entry.getName() + " to " + targetPath);
+                    LOGGER.debug("Processed entry: " + entry.getName() + " to " + targetPath);
                 }
             }
         } catch (Exception e) {
             LOGGER.error("Failed to copy directory from jar: " + sourceDir, e);
             throw new IOException("Failed to copy directory from jar: " + sourceDir, e);
+        }
+    }
+
+    private void copyFileWithRetries(ZipFile jarFile, ZipEntry entry, Path targetPath) throws IOException {
+        int attempt = 0;
+        while (attempt < MAX_RETRIES) {
+            try (InputStream is = jarFile.getInputStream(entry)) {
+                Files.createDirectories(targetPath.getParent());
+                Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                LOGGER.debug("Copied file: " + entry.getName() + " to " + targetPath);
+                return;
+            } catch (IOException e) {
+                attempt++;
+                LOGGER.warn("Retry " + attempt + " for copying file: " + entry.getName() + " to " + targetPath, e);
+                if (attempt >= MAX_RETRIES) {
+                    LOGGER.error("Failed to copy file after " + MAX_RETRIES + " attempts: " + entry.getName() + " to " + targetPath, e);
+                    throw e;
+                }
+            }
         }
     }
 
