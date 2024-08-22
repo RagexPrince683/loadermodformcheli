@@ -37,15 +37,21 @@ public class mcheliloader {
 
         String downloadDir = modsDir.toString();
 
+        // Check if the mod is already installed (e.g., check if a known file exists)
+        Path modFilePath = Paths.get(modsDir.toString(), "mchelio-new-vehicles");
+        if (Files.exists(modFilePath)) {
+            LOGGER.info("Mod is already installed. Skipping download.");
+            return;
+        }
+
         for (String fileURL : fileURLs) {
             try {
                 Path zipFilePath = downloadFile(fileURL, downloadDir);
                 unzipFile(zipFilePath.toString(), downloadDir);
                 Files.delete(zipFilePath); // Clean up the zip file after extraction
-                System.out.println("Downloaded and extracted: " + fileURL + " to " + downloadDir);
+                LOGGER.info("Downloaded and extracted: " + fileURL + " to " + downloadDir);
             } catch (IOException e) {
-                System.err.println("Failed to download or extract: " + fileURL);
-                e.printStackTrace();
+                LOGGER.error("Failed to download or extract: " + fileURL, e);
             }
         }
     }
