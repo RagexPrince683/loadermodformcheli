@@ -24,22 +24,21 @@ import java.util.Enumeration;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import static com.hbm.main.MainRegistry.configDir;
-
-
 @Mod(
         modid = "mcheliloader",
         name = "mcheliloader",
         dependencies = "required-after:Forge@[10.13.2.1230,)"
 )
 public class mcheliloader {
-    File minecraftDir = configDir.getParentFile();
+    private File minecraftDir;
     private static final Logger LOGGER = LogManager.getLogger(mcheliloader.class.getName());
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
+
+        minecraftDir = event.getModConfigurationDirectory().getParentFile();
         String[] fileURLs = {
-                "https://supporter-files.nexus-cdn.com/197/375/Mcheli-O%20V1.7.1-375-1-7-10-1722557745.zip?md5=wyCG2ecseY2uroQwW7voxA&expires=1724092780&user_id=178368000"
+                "https://github.com/RagexPrince683/MCH-mocmaster"
         };
 
         Path modsDir = Paths.get(minecraftDir.getPath(), "mods");
@@ -77,8 +76,8 @@ public class mcheliloader {
         inputStream.close();
     }
 
-    @Mod.EventHandler
-    public void init(FMLInitializationEvent evt) {
-
-    }
+   // @Mod.EventHandler
+   // public void init(FMLInitializationEvent evt) {
+//
+   // }
 }
