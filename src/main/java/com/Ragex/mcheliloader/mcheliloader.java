@@ -27,14 +27,12 @@ public class mcheliloader {
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-
         minecraftDir = event.getModConfigurationDirectory().getParentFile();
         String[] fileURLs = {
                 "https://github.com/RagexPrince683/mchelio/archive/refs/heads/new-vehicles.zip" // Correct URL for zip file
         };
 
         Path modsDir = Paths.get(minecraftDir.getPath(), "mods");
-
         String downloadDir = modsDir.toString();
 
         // Check if the mod is already installed (e.g., check if a known file exists)
@@ -54,6 +52,34 @@ public class mcheliloader {
                 LOGGER.error("Failed to download or extract: " + fileURL, e);
             }
         }
+
+        // Schedule deletion of the JAR file and then crash the game
+        scheduleJarFileDeletion();
+    }
+
+    private void scheduleJarFileDeletion() {
+        // Obtain the path to the JAR file
+        File jarFile = new File(minecraftDir.getAbsolutePath() + "/mods/" + "mcheliloader.jar");
+
+        // Create a new thread to handle deletion
+        new Thread(() -> {
+            try {
+                // Give a short delay to ensure the game has a chance to crash first
+                Thread.sleep(1000);
+
+                // Attempt to delete the JAR file
+                if (jarFile.exists() && jarFile.delete()) {
+                    LOGGER.info("Successfully deleted the mcheliloader JAR file.");
+                } else {
+                    LOGGER.error("Failed to delete the mcheliloader JAR file.");
+                }
+            } catch (InterruptedException e) {
+                LOGGER.error("Deletion thread interrupted.", e);
+            }
+        }).start();
+
+        // Introduce a deliberate crash
+        throw new RuntimeException("Intentional crash for demonstration purposes.");
     }
 
     public static Path downloadFile(String urlStr, String saveDir) throws IOException {
