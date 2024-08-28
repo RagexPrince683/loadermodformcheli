@@ -24,15 +24,16 @@ public class mcheliloader {
     private File minecraftDir;
     private static final Logger LOGGER = LogManager.getLogger(mcheliloader.class.getName());
 
-    private static final String EXTRACTED_FOLDER_DW = "DWbout-it-1";
+    //private static final String EXTRACTED_FOLDER_DW = "DWbout-it-1";
     private static final String EXTRACTED_FOLDER_VEHICLES = "mchelio-new-vehicles";
     private static final String VEHICLES_FOLDER_NAME = "mchelio";
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         minecraftDir = event.getModConfigurationDirectory().getParentFile();
+        //"https://github.com/Buhnana/DWbout-it/archive/refs/tags/V1.zip",
         String[] fileURLs = {
-                "https://github.com/Buhnana/DWbout-it/archive/refs/tags/V1.zip",
+
                 "https://github.com/RagexPrince683/mchelio/archive/refs/heads/new-vehicles.zip"
         };
 
@@ -74,6 +75,9 @@ public class mcheliloader {
                 if (fileURL.contains("DWbout-it") && isHBMInstalled) {
                     LOGGER.info("Skipping download of HBM mod as it is already installed.");
                     continue; // Skip downloading and processing the HBM mod
+                } else {
+                    JOptionPane.showMessageDialog(frame, "Error, you need to install the Nuclear Tech Mod",
+                            "Error", JOptionPane.INFORMATION_MESSAGE);
                 }
 
                 // Download the ZIP
@@ -82,43 +86,44 @@ public class mcheliloader {
                 // Unzip
                 unzipFile(zipFilePath.toString(), downloadDir);
 
-                if (fileURL.contains("DWbout-it")) {
+                //if (fileURL.contains("DWbout-it")) {
                     // Wait until the extracted folder is created
-                    Path extractedFolder = Paths.get(downloadDir, EXTRACTED_FOLDER_DW);
-                    while (!Files.exists(extractedFolder)) {
-                        try {
-                            Thread.sleep(500); // Wait 0.5 seconds before checking again
-                        } catch (InterruptedException e) {
-                            LOGGER.error("Thread was interrupted while waiting for the folder to be created.", e);
-                        }
-                    }
+                    //Path extractedFolder = Paths.get(downloadDir, EXTRACTED_FOLDER_DW);
+                   // while (!Files.exists(extractedFolder)) {
+                   //     try {
+                   //         Thread.sleep(500); // Wait 0.5 seconds before checking again
+                   //     } catch (InterruptedException e) {
+                   //         LOGGER.error("Thread was interrupted while waiting for the folder to be created.", e);
+                   //     }
+                   // }
 
                     // Find the TXT file with "HBM" in its name
-                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(extractedFolder, "*.txt")) {
-                        for (Path entry : stream) {
-                            if (entry.getFileName().toString().contains("HBM")) {
-                                // Dynamically set the MOD_FILE_NAME based on the TXT file name
-                                String modFileName = entry.getFileName().toString().replace(".txt", ".jar");
-
-                                // Move the TXT file to the mods folder and rename it to .jar
-                                Path jarFilePath = modsDir.resolve(modFileName);
-                                Files.move(entry, jarFilePath, StandardCopyOption.REPLACE_EXISTING);
-                                LOGGER.info("Moved and renamed the HBM TXT file to JAR.");
-
-                                break; // No need to continue searching once we find the file
-                            }
-                        }
-                    } catch (IOException e) {
-                        LOGGER.error("Failed to find or move the HBM TXT file.", e);
-                    }
-
-                    // Delete the extracted folder
-                    deleteFolderRecursively(extractedFolder);
+                 //   try (DirectoryStream<Path> stream = Files.newDirectoryStream(extractedFolder, "*.txt")) {
+                 //       for (Path entry : stream) {
+                 //           if (entry.getFileName().toString().contains("HBM")) {
+                 //               // Dynamically set the MOD_FILE_NAME based on the TXT file name
+                 //               String modFileName = entry.getFileName().toString().replace(".txt", ".jar");
+//
+                 //               // Move the TXT file to the mods folder and rename it to .jar
+                 //               Path jarFilePath = modsDir.resolve(modFileName);
+                 //               Files.move(entry, jarFilePath, StandardCopyOption.REPLACE_EXISTING);
+                 //               LOGGER.info("Moved and renamed the HBM TXT file to JAR.");
+//
+                 //               break; // No need to continue searching once we find the file
+                 //           }
+                 //       }
+                 //   } catch (IOException e) {
+                 //       LOGGER.error("Failed to find or move the HBM TXT file.", e);
+                 //   }
+//
+                 //   // Delete the extracted folder
+                 //   deleteFolderRecursively(extractedFolder);
 
                     // Delete the ZIP file
                     Files.delete(zipFilePath);
 
-                } else if (fileURL.contains("new-vehicles")) {
+                //} else
+                    if (fileURL.contains("new-vehicles")) {
                     // For the new-vehicles file, ensure the extracted folder exists
                     Path extractedFolder = Paths.get(downloadDir, EXTRACTED_FOLDER_VEHICLES);
                     if (Files.exists(extractedFolder)) {
