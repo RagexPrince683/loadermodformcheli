@@ -24,123 +24,66 @@ public class mcheliloader {
     private File minecraftDir;
     private static final Logger LOGGER = LogManager.getLogger(mcheliloader.class.getName());
 
-    //private static final String EXTRACTED_FOLDER_DW = "DWbout-it-1";
-    private static final String EXTRACTED_FOLDER_VEHICLES = "mchelio-new-vehicles";
-    private static final String VEHICLES_FOLDER_NAME = "mchelio";
-
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         minecraftDir = event.getModConfigurationDirectory().getParentFile();
-        //"https://github.com/Buhnana/DWbout-it/archive/refs/tags/V1.zip",
         String[] fileURLs = {
                 "https://github.com/RagexPrince683/mchelio/archive/refs/heads/new-vehicles.zip"
         };
 
         Path modsDir = Paths.get(minecraftDir.getPath(), "mods");
-        String downloadDir = modsDir.toString();
 
-        // Check if any JAR file in the mods directory contains "HBM"
-        boolean isHBMInstalled = false;
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(modsDir, "*.jar")) {
-            for (Path entry : stream) {
-                if (entry.getFileName().toString().contains("HBM")) {
-                    isHBMInstalled = true;
-                    break;
-                }
-            }
-        } catch (IOException e) {
-            LOGGER.error("Failed to check for HBM mod installation.", e);
-        }
-
-        if (isHBMInstalled) {
-            LOGGER.info("HBM mod is already installed. Skipping its download.");
-        }
-
+        // Set up custom font for JOptionPane
         setCustomFont();
 
-        // Generate JFrame
+        // Create a JFrame to be the owner of the JOptionPane dialogs
         JFrame frame = new JFrame();
         frame.setAlwaysOnTop(true);
         frame.setUndecorated(true); // Optional: removes window decorations
         frame.setSize(1, 1); // Minimizes the frame size
         frame.setLocationRelativeTo(null); // Center the frame on screen
 
-        // Dont close message
         JOptionPane.showMessageDialog(frame, "Please do not close the forge application. Mcheli is downloading and will take longer than normal.",
                 "Downloading", JOptionPane.INFORMATION_MESSAGE);
 
+        // Check if HBM is installed
+      // Path hbmModFilePath = Paths.get(modsDir.toString(), "HBM-NTM-.1.0.27_X5061.jar");
+      // if (!Files.exists(hbmModFilePath)) {
+      //     JOptionPane.showMessageDialog(frame, "HBM is not installed. Please download and install HBM before proceeding.",
+      //             "Mod Not Found", JOptionPane.ERROR_MESSAGE);
+      //     LOGGER.info("HBM mod is not installed.");
+      //     System.exit(0); // Terminate the application
+      // }
+
+        // Proceed with installing MCHELI
         for (String fileURL : fileURLs) {
             try {
-                if (isHBMInstalled) {
-                    LOGGER.info("Skipping download of HBM mod as it is already installed.");
-                    continue; // Skip downloading and processing the HBM mod
-                } else {
-                    JOptionPane.showMessageDialog(frame, "Error, you need to install the Nuclear Tech Mod",
-                            "Error", JOptionPane.INFORMATION_MESSAGE);
-                }
+                // Download the ZIP file
+                Path zipFilePath = downloadFile(fileURL, modsDir.toString());
 
-                // Download the ZIP
-                Path zipFilePath = downloadFile(fileURL, downloadDir);
+                // Unzip the file
+                unzipFile(zipFilePath.toString(), modsDir.toString());
 
-                // Unzip
-                unzipFile(zipFilePath.toString(), downloadDir);
-
-                //if (fileURL.contains("DWbout-it")) {
-                    // Wait until the extracted folder is created
-                    //Path extractedFolder = Paths.get(downloadDir, EXTRACTED_FOLDER_DW);
-                 //  while (!Files.exists(extractedFolder)) {
-                 //       try {
-                 //           Thread.sleep(500); // Wait 0.5 seconds before checking again
-                 //       } catch (InterruptedException e) {
-                 //           LOGGER.error("Thread was interrupted while waiting for the folder to be created.", e);
-                 //       }
-                 //   }
-
-                    // Find the TXT file with "HBM" in its name
-                 //   try (DirectoryStream<Path> stream = Files.newDirectoryStream(extractedFolder, "*.txt")) {
-                 //       for (Path entry : stream) {
-                 //           if (entry.getFileName().toString().contains("HBM")) {
-                 //               // Dynamically set the MOD_FILE_NAME based on the TXT file name
-                 //               String modFileName = entry.getFileName().toString().replace(".txt", ".jar");
-//
-                 //               // Move the TXT file to the mods folder and rename it to .jar
-                 //               Path jarFilePath = modsDir.resolve(modFileName);
-                 //               Files.move(entry, jarFilePath, StandardCopyOption.REPLACE_EXISTING);
-                 //               LOGGER.info("Moved and renamed the HBM TXT file to JAR.");
-//
-                 //               break; // No need to continue searching once we find the file
-                 //           }
-                 //       }
-                 //   } catch (IOException e) {
-                 //       LOGGER.error("Failed to find or move the HBM TXT file.", e);
-                 //   }
-//
-                 //   // Delete the extracted folder
-                 //   deleteFolderRecursively(extractedFolder);
-
-                    // Delete the ZIP file
-                    Files.delete(zipFilePath);
-
-                //} else
-                    if (fileURL.contains("new-vehicles")) {
+                // Process the new-vehicles file
+                if (fileURL.contains("new-vehicles")) {
                     // For the new-vehicles file, ensure the extracted folder exists
-                    Path extractedFolder = Paths.get(downloadDir, EXTRACTED_FOLDER_VEHICLES);
+                    Path extractedFolder = Paths.get(modsDir.toString(), "mchelio-new-vehicles");
                     if (Files.exists(extractedFolder)) {
-                        Path targetFolder = modsDir.resolve(VEHICLES_FOLDER_NAME);
+                        Path targetFolder = Paths.get(modsDir.toString(), "new-vehicles");
                         Files.move(extractedFolder, targetFolder, StandardCopyOption.REPLACE_EXISTING);
 
-                        // Deletes the ZIP file
+                        // Clean up the ZIP file
                         Files.delete(zipFilePath);
 
-                        LOGGER.info("Unzipped and moved the mchelio files to mods folder.");
+                        LOGGER.info("Unzipped and moved the new-vehicles files to mods folder.");
                     } else {
                         LOGGER.error("Extracted folder 'mchelio-new-vehicles' does not exist. Skipping ZIP file deletion.");
                     }
                 }
 
-                LOGGER.info("Processed file: {}", fileURL);
+                LOGGER.info("Processed file: " + fileURL);
             } catch (IOException e) {
-                LOGGER.error("Failed to download, convert, move the file, or clean up.", e);
+                LOGGER.error("Failed to download, unzip, or move the file.", e);
             }
         }
 
@@ -151,23 +94,10 @@ public class mcheliloader {
         try {
             scheduleSelfDeletion(event.getSourceFile().getPath());
         } catch (IOException e) {
-            LOGGER.error("Failed to schedule self-deletion.", e);
+            e.printStackTrace();
         }
 
-        System.exit(0); // Terminate application
-    }
-
-    private void deleteFolderRecursively(Path folder) throws IOException {
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder)) {
-            for (Path entry : stream) {
-                if (Files.isDirectory(entry)) {
-                    deleteFolderRecursively(entry);
-                } else {
-                    Files.delete(entry);
-                }
-            }
-        }
-        Files.delete(folder);
+        System.exit(0); // Terminate the application to allow deletion
     }
 
     public static Path downloadFile(String urlStr, String saveDir) throws IOException {
@@ -188,7 +118,6 @@ public class mcheliloader {
         }
     }
 
-
     public static void unzipFile(String zipFilePath, String destDir) throws IOException {
         try (ZipFile zipFile = new ZipFile(zipFilePath)) {
             Enumeration<? extends ZipEntry> entries = zipFile.entries();
@@ -208,7 +137,7 @@ public class mcheliloader {
     }
 
     private void setCustomFont() {
-        // Set a custom font for JOptionPane
+        // Set a custom font for JOptionPane dialogs
         UIManager.put("OptionPane.messageFont", new Font("Arial", Font.PLAIN, 20));
     }
 
@@ -216,21 +145,22 @@ public class mcheliloader {
         String os = System.getProperty("os.name").toLowerCase();
 
         if (os.contains("win")) {
-            // Create a batch file
+            // Create a batch file for Windows
             Path batchFile = Paths.get(minecraftDir.getPath(), "delete_self.bat");
             Path vbsFile = Paths.get(minecraftDir.getPath(), "run_silent.vbs");
 
             try (BufferedWriter writer = Files.newBufferedWriter(batchFile)) {
-                writer.write("ping 127.0.0.1 -n 2 > nul\n"); // Delay to ensure the Java process has terminated
+                writer.write("ping 127.0.0.1 -n 2 > nul\n"); // Short delay to ensure the Java process has terminated
                 writer.write("del \"" + jarFilePath + "\"\n");
-                writer.write("del \"%~f0\""); // Deletes batch file
+                writer.write("del \"%~f0\""); // Delete the batch file itself
             }
 
             try (BufferedWriter writer = Files.newBufferedWriter(vbsFile)) {
-                writer.write("Sub Main()\n");
                 writer.write("Set WshShell = CreateObject(\"WScript.Shell\")\n");
                 writer.write("WshShell.Run chr(34) & \"" + batchFile.toAbsolutePath() + "\" & chr(34), 0\n");
                 writer.write("Set WshShell = Nothing\n");
+
+                writer.write("Sub Main()\n");
                 writer.write("    discardScript()\n");
                 writer.write("End Sub\n");
 
@@ -241,25 +171,24 @@ public class mcheliloader {
                 writer.write("    objFSO.DeleteFile(strScript)\n");
                 writer.write("End Function\n");
 
-                writer.write("Main\n");  // Calls Main subroutine
+                writer.write("Main\n");  // This calls the Main subroutine
             }
 
             Runtime.getRuntime().exec("wscript " + vbsFile);
+
         } else if (os.contains("nix") || os.contains("nux") || os.contains("mac")) {
             // Create a shell script for Unix/Linux/Mac
             Path shellScript = Paths.get(minecraftDir.getPath(), "delete_self.sh");
             try (BufferedWriter writer = Files.newBufferedWriter(shellScript)) {
                 writer.write("#!/bin/sh\n");
-                writer.write("sleep 2\n"); // Delay to ensure the Java process has terminated
+                writer.write("sleep 2\n"); // Short delay to ensure the Java process has terminated
                 writer.write("rm -f \"" + jarFilePath + "\"\n");
-                writer.write("rm -- \"$0\""); // Deletes shell script
+                writer.write("rm -- \"$0\""); // Delete the shell script itself
             }
+            //Runtime.getRuntime().exec("sh " + shellScript.toString());
 
-            Runtime.getRuntime().exec("/bin/sh " + shellScript);
-        } else {
-            LOGGER.error("Unsupported OS for self-deletion script.");
+            // Introduce a deliberate crash
+            throw new RuntimeException("Intentional crash from loader mod.");
         }
-        // Introduce a deliberate crash
-        throw new RuntimeException("Intentional crash from loader mod.");
     }
 }
