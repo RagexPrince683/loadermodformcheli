@@ -17,14 +17,18 @@ buildscript {
     }
 }
 
-
+// Increase the Java heap size for Gradle
+gradle.projectsEvaluated {
+    tasks.withType(JavaCompile) {
+        options.fork = true
+        options.forkOptions.jvmArgs = ['-Xmx4G']
+    }
+}
 
 apply plugin: 'forge'
 
-
-
 version = "1.0"
-group= "com.yourname.modid" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
+group = "com.yourname.modid" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
 archivesBaseName = "mcheliloader"
 
 minecraft {
@@ -40,9 +44,7 @@ repositories {
 }
 
 dependencies {
-
-	
-   // compile "com.xcompwiz.lookingglass:lookingglass:0.2.0.00:dev"
+    // compile "com.xcompwiz.lookingglass:lookingglass:0.2.0.00:dev"
     // you may put jars on which you depend on in ./libs
     // or you may define them like so..
     //compile "some.group:artifact:version:classifier"
@@ -57,13 +59,9 @@ dependencies {
     // for more info...
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
-
 }
 
-
-
-processResources
-{
+processResources {
     // this will ensure that this task is redone when the versions change.
     inputs.property "version", project.version
     inputs.property "mcversion", project.minecraft.version
@@ -71,19 +69,19 @@ processResources
     // replace stuff in mcmod.info, nothing else
     from(sourceSets.main.resources.srcDirs) {
         include 'mcmod.info'
-                
+
         // replace version and mcversion
-        expand 'version':project.version, 'mcversion':project.minecraft.version
+        expand 'version': project.version, 'mcversion': project.minecraft.version
     }
-        
-    // copy everything else, thats not the mcmod.info
+
+    // copy everything else, that's not the mcmod.info
     from(sourceSets.main.resources.srcDirs) {
         exclude 'mcmod.info'
     }
 }
 
-
 apply plugin: 'java'
+
 compileJava {
     sourceCompatibility = '1.8'
     targetCompatibility = '1.8'
