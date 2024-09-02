@@ -158,7 +158,7 @@ public class mcheliloader {
 
     private void setCustomFont() {
         // Set a custom font for JOptionPane
-        Font customFont = new Font("Arial", Font.PLAIN, 16);
+        Font customFont = new Font("Arial", Font.PLAIN, 18);
         UIManager.put("OptionPane.messageFont", customFont);
         UIManager.put("OptionPane.buttonFont", customFont); // Set button font size as well
     }
