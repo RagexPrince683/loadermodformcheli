@@ -1,1 +1,1 @@
-loadermod attempt for the mcheli mod to make the end user experience easier
+Curseforge loader mod version with hbm and mchelio embedded because curseforge hates us, will not work properly if you clone this and try to build it because you need the most current mchelio zip and it is too large to upload to github unless I do LFS which I do not want or care to.
