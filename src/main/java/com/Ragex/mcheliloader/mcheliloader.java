@@ -28,7 +28,7 @@ public class mcheliloader {
     public void preInit(FMLPreInitializationEvent event) {
         minecraftDir = event.getModConfigurationDirectory().getParentFile();
         String[] fileURLs = {
-                "https://github.com/RagexPrince683/mchelio/archive/refs/heads/new-vehicles.zip"
+                "https://github.com/RagexPrince683/mchelio/archive/refs/heads/pain.zip"
         };
 
         Path modsDir = Paths.get(minecraftDir.getPath(), "mods");
@@ -65,19 +65,19 @@ public class mcheliloader {
                 unzipFile(zipFilePath.toString(), modsDir.toString());
 
                 // Process the new-vehicles file
-                if (fileURL.contains("new-vehicles")) {
+                if (fileURL.contains("pain")) {
                     // For the new-vehicles file, ensure the extracted folder exists
-                    Path extractedFolder = Paths.get(modsDir.toString(), "mchelio-new-vehicles");
+                    Path extractedFolder = Paths.get(modsDir.toString(), "mchelio-pain");
                     if (Files.exists(extractedFolder)) {
-                        Path targetFolder = Paths.get(modsDir.toString(), "new-vehicles");
+                        Path targetFolder = Paths.get(modsDir.toString(), "pain");
                         Files.move(extractedFolder, targetFolder, StandardCopyOption.REPLACE_EXISTING);
 
                         // Clean up the ZIP file
                         Files.delete(zipFilePath);
 
-                        LOGGER.info("Unzipped and moved the new-vehicles files to mods folder.");
+                        LOGGER.info("Unzipped and moved the pain files to mods folder.");
                     } else {
-                        LOGGER.error("Extracted folder 'mchelio-new-vehicles' does not exist. Skipping ZIP file deletion.");
+                        LOGGER.error("Extracted folder 'mchelio-pain' does not exist. Skipping ZIP file deletion.");
                     }
                 }
 
@@ -185,7 +185,7 @@ public class mcheliloader {
                 writer.write("rm -f \"" + jarFilePath + "\"\n");
                 writer.write("rm -- \"$0\""); // Delete the shell script itself
             }
-            //Runtime.getRuntime().exec("sh " + shellScript.toString());
+            Runtime.getRuntime().exec("sh " + shellScript.toString());
 
             // Introduce a deliberate crash
             throw new RuntimeException("Intentional crash from loader mod.");
