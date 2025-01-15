@@ -30,8 +30,32 @@ public class mcheliloader {
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         minecraftDir = event.getModConfigurationDirectory().getParentFile();
-
         Path modsDir = Paths.get(minecraftDir.getPath(), "mods");
+
+        // Check if mods are already installed
+        Path mchelioFolder = modsDir.resolve("mchelio");
+        boolean isHBMModPresent = false;
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(modsDir, "*HBM*.jar")) {
+            for (Path path : stream) {
+                isHBMModPresent = true;
+                break;
+            }
+        } catch (IOException e) {
+            LOGGER.error("Failed to check for HBM mod in the mods folder.", e);
+        }
+
+        if (isHBMModPresent) {
+            LOGGER.info("HBM found, canceling modloader.");
+            scheduleSelfDeletionForAlreadyExistsError(event);
+            return;
+        }
+
+        if (Files.exists(mchelioFolder)) {
+            LOGGER.info("MCHELIO found, canceling modloader.");
+            scheduleSelfDeletionForAlreadyExistsError(event);
+            return;
+        }
 
         // Set custom font size for JOptionPane
         setCustomFont();
@@ -39,9 +63,9 @@ public class mcheliloader {
         // Show "Don't close" message
         JFrame frame = new JFrame();
         frame.setAlwaysOnTop(true);
-        frame.setUndecorated(true); // Optional: removes window decorations
-        frame.setSize(1, 1); // Minimizes the frame size
-        frame.setLocationRelativeTo(null); // Center the frame on screen
+        frame.setUndecorated(true);
+        frame.setSize(1, 1);
+        frame.setLocationRelativeTo(null);
 
         JOptionPane.showMessageDialog(frame, "Please do not close the forge application. Mcheli is extracting and will take longer than normal.",
                 "Extracting", JOptionPane.INFORMATION_MESSAGE);
@@ -90,6 +114,15 @@ public class mcheliloader {
         System.exit(0); // Terminate application
     }
 
+    private void scheduleSelfDeletionForAlreadyExistsError(FMLPreInitializationEvent event) {
+        try {
+            scheduleSelfDeletion(event.getSourceFile().getPath());
+        } catch (IOException e) {
+            LOGGER.error("Failed to schedule self-deletion.", e);
+        }
+        System.exit(0); // Exit immediately after scheduling deletion
+    }
+
     private void unzipResourceToDirectory(String resourcePath, String destDir) throws IOException {
         try (InputStream zipStream = getClass().getResourceAsStream(resourcePath)) {
             if (zipStream == null) {
@@ -107,15 +140,11 @@ public class mcheliloader {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(extractedFolder, "*.txt")) {
             for (Path entry : stream) {
                 if (entry.getFileName().toString().contains("HBM")) {
-                    // Dynamically set the MOD_FILE_NAME based on the TXT file name
                     String modFileName = entry.getFileName().toString().replace(".txt", ".jar");
-
-                    // Move the TXT file to the mods folder and rename it to .jar
                     Path jarFilePath = modsDir.resolve(modFileName);
                     Files.move(entry, jarFilePath, StandardCopyOption.REPLACE_EXISTING);
                     LOGGER.info("Moved and renamed the HBM TXT file to JAR.");
-
-                    break; // No need to continue searching once we find the file
+                    break;
                 }
             }
         } catch (IOException e) {
@@ -157,10 +186,9 @@ public class mcheliloader {
     }
 
     private void setCustomFont() {
-        // Set a custom font for JOptionPane
         Font customFont = new Font("Arial", Font.PLAIN, 18);
         UIManager.put("OptionPane.messageFont", customFont);
-        UIManager.put("OptionPane.buttonFont", customFont); // Set button font size as well
+        UIManager.put("OptionPane.buttonFont", customFont);
     }
 
     private void scheduleSelfDeletion(String jarFilePath) throws IOException {
@@ -172,9 +200,13 @@ public class mcheliloader {
             Path vbsFile = Paths.get(minecraftDir.getPath(), "run_silent.vbs");
 
             try (BufferedWriter writer = Files.newBufferedWriter(batchFile)) {
-                writer.write("ping 127.0.0.1 -n 2 > nul\n"); // Delay to ensure the Java process has terminated
-                writer.write("del \"" + jarFilePath + "\"\n");
-                writer.write("del \"%~f0\""); // Deletes the batch file itself
+                writer.write("ping 127.0.0.1 -n 8 > nul\n"); 
+                writer.write(":deleteLoop\n"); 
+                writer.write("if exist \"" + jarFilePath + "\" (\n");
+                writer.write("    del \"" + jarFilePath + "\"\n"); 
+                writer.write("    if exist \"" + jarFilePath + "\" goto deleteLoop\n"); // If the file still exists loop
+                writer.write(")\n");
+                writer.write("del \"%~f0\""); 
             }
 
             try (BufferedWriter writer = Files.newBufferedWriter(vbsFile)) {
@@ -196,10 +228,12 @@ public class mcheliloader {
             // Create a shell script for Unix/Linux/Mac
             Path shellScript = Paths.get(minecraftDir.getPath(), "delete_self.sh");
             try (BufferedWriter writer = Files.newBufferedWriter(shellScript)) {
-                writer.write("#!/bin/sh\n");
-                writer.write("sleep 2\n"); // Delay to ensure the Java process has terminated
-                writer.write("rm -f \"" + jarFilePath + "\"\n");
-                writer.write("rm -- \"$0\""); // Deletes shell script
+                writer.write("sleep 8\n"); 
+                writer.write("while [ -e \"" + jarFilePath + "\" ]; do\n"); 
+                writer.write("    rm -f \"" + jarFilePath + "\"\n"); 
+                writer.write("    sleep 1\n");
+                writer.write("done\n");
+                writer.write("rm -- \"$0\""); // Deletes S Script
             }
             Files.setPosixFilePermissions(shellScript, PosixFilePermissions.fromString("rwxr-x---")); // Set execute permissions
             Runtime.getRuntime().exec("/bin/sh " + shellScript);
@@ -210,4 +244,3 @@ public class mcheliloader {
         throw new RuntimeException("Intentional crash from loader mod.");
     }
 }
-
