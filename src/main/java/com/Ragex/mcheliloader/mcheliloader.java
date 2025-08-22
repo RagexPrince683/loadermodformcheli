@@ -108,13 +108,13 @@ public class mcheliloader {
 
         final long expectedSize = totalSize;
         final JDialog finalDialog = dialog;
-        final HttpURLConnection finalConnection = connection; // <- FIX: make connection final for lambda
+        final HttpURLConnection finalConnection = connection; // final reference for thread
 
         Thread downloadThread = new Thread(() -> {
             try (InputStream in = finalConnection.getInputStream();
                  FileOutputStream out = new FileOutputStream(destination.toFile())) {
 
-                byte[] buffer = new byte[64 * 1024]; // 64 KB chunks
+                byte[] buffer = new byte[8 * 1024 * 1024]; // 8 MB buffer for big files
                 long totalRead = 0;
                 int read;
                 while ((read = in.read(buffer)) != -1) {
@@ -123,7 +123,9 @@ public class mcheliloader {
                     final int progress = (int) ((totalRead * 100) / expectedSize);
                     SwingUtilities.invokeLater(() -> progressBar.setValue(progress));
                 }
-                out.getFD().sync();
+
+                out.flush();
+                out.getFD().sync(); // force flush to disk
             } catch (IOException e) {
                 e.printStackTrace();
                 JOptionPane.showMessageDialog(null, "Download failed: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -133,13 +135,15 @@ public class mcheliloader {
         });
 
         downloadThread.start();
-        dialog.setVisible(true); // this will block until dispose() is called
-        connection.disconnect();
+        dialog.setVisible(true); // block until dispose()
 
         try {
-            downloadThread.join(); // wait until thread finishes fully
+            downloadThread.join(); // ensure download finishes fully before continuing
         } catch (InterruptedException ignored) {}
+
+        connection.disconnect();
     }
+
 
 
 }
