@@ -12,6 +12,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.*;
 
+//modrinth loader mod (installs the CF loadermod)
+
 @Mod(
         modid = "modrinthloader",
         name = "Modrinth Loader",
