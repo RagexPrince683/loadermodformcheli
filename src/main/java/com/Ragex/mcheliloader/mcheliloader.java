@@ -5,6 +5,7 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,7 +13,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.*;
 
-// modrinth loader mod (installs the CF loader mod)
+// Modrinth loader mod (installs the CF loader mod)
 
 @Mod(
         modid = "modrinthloader",
@@ -48,14 +49,30 @@ public class mcheliloader {
             downloadFile(CF_LOADER_URL, cfLoaderPath);
             LOGGER.info("Downloaded CurseForge loader successfully to " + cfLoaderPath);
 
-            // Force crash after successful install
-            throw new RuntimeException(
-                    "Mcheli loader was just installed.\n" +
-                            "Please restart your game to complete the installation."
+            // Show GUI popup to user
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Mcheli Loader was installed successfully.\n" +
+                            "Please restart your game to complete installation.",
+                    "Mcheli Loader",
+                    JOptionPane.INFORMATION_MESSAGE
             );
+
+            // Force crash afterwards
+            throw new RuntimeException("Mcheli Loader installed. Please restart your game.");
 
         } catch (IOException e) {
             LOGGER.error("Failed to download CurseForge loader!", e);
+
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Failed to download the Mcheli Loader!\n" +
+                            "Check your internet connection or try again later.",
+                    "Mcheli Loader Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+
+            throw new RuntimeException("Mcheli Loader download failed!", e);
         }
     }
 
