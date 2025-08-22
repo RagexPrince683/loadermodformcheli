@@ -80,11 +80,25 @@ public class mcheliloader {
         Files.createDirectories(destination.getParent());
 
         HttpURLConnection connection = (HttpURLConnection) new URL(fileURL).openConnection();
+        connection.setInstanceFollowRedirects(true); // follow 3xx redirects
         connection.setRequestProperty("User-Agent", "Mozilla/5.0");
         connection.connect();
 
-        if (connection.getResponseCode() != 200) {
-            throw new IOException("Failed to download file: HTTP " + connection.getResponseCode());
+        int responseCode = connection.getResponseCode();
+        if (responseCode / 100 == 3) { // handle manual redirect if needed
+            String newLocation = connection.getHeaderField("Location");
+            connection.disconnect();
+            if (newLocation == null) {
+                throw new IOException("Redirected but no Location header found.");
+            }
+            connection = (HttpURLConnection) new URL(newLocation).openConnection();
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+            connection.connect();
+            responseCode = connection.getResponseCode();
+        }
+
+        if (responseCode != HttpURLConnection.HTTP_OK) {
+            throw new IOException("Failed to download file: HTTP " + responseCode);
         }
 
         try (InputStream in = connection.getInputStream()) {
@@ -93,4 +107,5 @@ public class mcheliloader {
             connection.disconnect();
         }
     }
+
 }
