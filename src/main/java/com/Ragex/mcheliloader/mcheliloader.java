@@ -6,10 +6,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import javax.swing.*;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.*;
@@ -46,6 +43,11 @@ public class mcheliloader {
 
             // Blocking download with modal dialog
             downloadWithProgressBlocking(CF_LOADER_URL, tempFile);
+
+            // Verify file is not empty / corrupted
+            if (Files.size(tempFile) < 1024 * 1024) { // less than 1 MB = bad
+                throw new IOException("Downloaded file is too small, likely corrupted.");
+            }
 
             // Move temp file to final destination after download is complete
             Files.move(tempFile, finalFile, StandardCopyOption.REPLACE_EXISTING);
@@ -94,7 +96,7 @@ public class mcheliloader {
 
         long totalSize = connection.getContentLengthLong();
         if (totalSize <= 0) {
-            System.out.println("Warning: Server did not report file size, progress bar may be inaccurate.");
+            LOGGER.warn("Warning: Server did not report file size, progress bar may be inaccurate.");
             totalSize = 1; // avoid divide by zero
         }
 
@@ -108,24 +110,25 @@ public class mcheliloader {
 
         final long expectedSize = totalSize;
         final JDialog finalDialog = dialog;
-        final HttpURLConnection finalConnection = connection; // final reference for thread
+        final HttpURLConnection finalConnection = connection;
 
         Thread downloadThread = new Thread(() -> {
-            try (InputStream in = finalConnection.getInputStream();
-                 FileOutputStream out = new FileOutputStream(destination.toFile())) {
+            try (InputStream in = new BufferedInputStream(finalConnection.getInputStream());
+                 FileOutputStream out = new FileOutputStream(destination.toFile());
+                 BufferedOutputStream bout = new BufferedOutputStream(out, 8 * 1024 * 1024)) {
 
-                byte[] buffer = new byte[8 * 1024 * 1024]; // 8 MB buffer for big files
+                byte[] buffer = new byte[8 * 1024 * 1024]; // 8 MB buffer
                 long totalRead = 0;
                 int read;
                 while ((read = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, read);
+                    bout.write(buffer, 0, read);
                     totalRead += read;
                     final int progress = (int) ((totalRead * 100) / expectedSize);
                     SwingUtilities.invokeLater(() -> progressBar.setValue(progress));
                 }
 
-                out.flush();
-                out.getFD().sync(); // force flush to disk
+                bout.flush();
+                out.getFD().sync();
             } catch (IOException e) {
                 e.printStackTrace();
                 JOptionPane.showMessageDialog(null, "Download failed: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -143,7 +146,4 @@ public class mcheliloader {
 
         connection.disconnect();
     }
-
-
-
 }
