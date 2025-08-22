@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.*;
 
 // Modrinth loader mod (installs the CF loader mod)
@@ -79,13 +81,16 @@ public class mcheliloader {
     private void downloadFile(String fileURL, Path destination) throws IOException {
         Files.createDirectories(destination.getParent());
 
+        // Use a temp file first
+        Path tempFile = destination.resolveSibling(destination.getFileName() + ".tmp");
+
         HttpURLConnection connection = (HttpURLConnection) new URL(fileURL).openConnection();
-        connection.setInstanceFollowRedirects(true); // follow 3xx redirects
+        connection.setInstanceFollowRedirects(true);
         connection.setRequestProperty("User-Agent", "Mozilla/5.0");
         connection.connect();
 
         int responseCode = connection.getResponseCode();
-        if (responseCode / 100 == 3) { // handle manual redirect if needed
+        if (responseCode / 100 == 3) { // handle redirect manually if needed
             String newLocation = connection.getHeaderField("Location");
             connection.disconnect();
             if (newLocation == null) {
@@ -101,11 +106,23 @@ public class mcheliloader {
             throw new IOException("Failed to download file: HTTP " + responseCode);
         }
 
-        try (InputStream in = connection.getInputStream()) {
-            Files.copy(in, destination, StandardCopyOption.REPLACE_EXISTING);
+        // Download and force flush
+        try (InputStream in = connection.getInputStream();
+             FileChannel outChannel = FileChannel.open(tempFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = in.read(buffer)) != -1) {
+                outChannel.write(ByteBuffer.wrap(buffer, 0, bytesRead));
+            }
+            outChannel.force(true); // flush to disk
         } finally {
             connection.disconnect();
         }
+
+        // Rename to final file name only after download is complete
+        Files.move(tempFile, destination, StandardCopyOption.REPLACE_EXISTING);
     }
+
 
 }
