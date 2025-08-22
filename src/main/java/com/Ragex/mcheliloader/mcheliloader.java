@@ -39,7 +39,6 @@ public class mcheliloader {
         Path modsDir = mcDir.toPath().resolve("mods");
         Path cfLoaderPath = modsDir.resolve(CF_LOADER_NAME);
 
-        // If the CurseForge loader already exists, skip
         if (Files.exists(cfLoaderPath)) {
             LOGGER.info("CurseForge loader already found in mods folder. Skipping download.");
             return;
@@ -51,32 +50,35 @@ public class mcheliloader {
             downloadFile(CF_LOADER_URL, cfLoaderPath);
             LOGGER.info("Downloaded CurseForge loader successfully to " + cfLoaderPath);
 
-            // Show GUI popup to user
-            JOptionPane.showMessageDialog(
-                    null,
-                    "Mcheli Loader was installed successfully.\n" +
-                            "Please restart your game to complete installation.",
-                    "Mcheli Loader",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
+            // Schedule GUI + crash on a separate thread to avoid main-thread deadlock
+            new Thread(() -> {
+                JOptionPane.showMessageDialog(
+                        null,
+                        "Mcheli Loader was installed successfully.\nPlease restart your game to complete installation.",
+                        "Mcheli Loader",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
 
-            // Force crash afterwards
-            throw new RuntimeException("Mcheli Loader installed. Please restart your game.");
+                // Crash after dialog closes
+                System.exit(1);
+            }).start();
 
         } catch (IOException e) {
             LOGGER.error("Failed to download CurseForge loader!", e);
 
-            JOptionPane.showMessageDialog(
-                    null,
-                    "Failed to download the Mcheli Loader!\n" +
-                            "Check your internet connection or try again later.",
-                    "Mcheli Loader Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
+            new Thread(() -> {
+                JOptionPane.showMessageDialog(
+                        null,
+                        "Failed to download the Mcheli Loader!\nCheck your internet connection or try again later.",
+                        "Mcheli Loader Error",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            }).start();
 
             throw new RuntimeException("Mcheli Loader download failed!", e);
         }
     }
+
 
     private void downloadFile(String fileURL, Path destination) throws IOException {
         Files.createDirectories(destination.getParent());
