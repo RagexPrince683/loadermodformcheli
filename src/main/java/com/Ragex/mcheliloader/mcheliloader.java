@@ -93,39 +93,53 @@ public class mcheliloader {
         }
 
         long totalSize = connection.getContentLengthLong();
+        if (totalSize <= 0) {
+            System.out.println("Warning: Server did not report file size, progress bar may be inaccurate.");
+            totalSize = 1; // avoid divide by zero
+        }
 
+        // Setup progress bar
         JProgressBar progressBar = new JProgressBar(0, 100);
         progressBar.setStringPainted(true);
         JOptionPane optionPane = new JOptionPane(progressBar, JOptionPane.INFORMATION_MESSAGE, JOptionPane.DEFAULT_OPTION, null, new Object[]{}, null);
         JDialog dialog = optionPane.createDialog("Downloading Mcheli Loader");
-        dialog.setModal(true); // BLOCKS Minecraft
+        dialog.setModal(true); // block game
         dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
 
-        final HttpURLConnection finalConnection = connection;
+        final long expectedSize = totalSize;
+        final JDialog finalDialog = dialog;
+        final HttpURLConnection finalConnection = connection; // <- FIX: make connection final for lambda
 
         Thread downloadThread = new Thread(() -> {
             try (InputStream in = finalConnection.getInputStream();
                  FileOutputStream out = new FileOutputStream(destination.toFile())) {
 
-                byte[] buffer = new byte[8 * 1024 * 1024]; // 8MB buffer
+                byte[] buffer = new byte[64 * 1024]; // 64 KB chunks
                 long totalRead = 0;
                 int read;
                 while ((read = in.read(buffer)) != -1) {
                     out.write(buffer, 0, read);
                     totalRead += read;
-                    final int progress = (int) ((totalRead * 100) / totalSize);
+                    final int progress = (int) ((totalRead * 100) / expectedSize);
                     SwingUtilities.invokeLater(() -> progressBar.setValue(progress));
                 }
                 out.getFD().sync();
             } catch (IOException e) {
                 e.printStackTrace();
+                JOptionPane.showMessageDialog(null, "Download failed: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             } finally {
-                SwingUtilities.invokeLater(dialog::dispose);
+                SwingUtilities.invokeLater(finalDialog::dispose);
             }
         });
 
         downloadThread.start();
-        dialog.setVisible(true); // BLOCKS until download finishes
+        dialog.setVisible(true); // this will block until dispose() is called
         connection.disconnect();
+
+        try {
+            downloadThread.join(); // wait until thread finishes fully
+        } catch (InterruptedException ignored) {}
     }
+
+
 }
