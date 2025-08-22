@@ -26,7 +26,7 @@ import java.nio.file.*;
 public class mcheliloader {
     private static final Logger LOGGER = LogManager.getLogger("ModrinthLoader");
 
-    // Direct link to your CF loader JAR
+    // Direct link to CF loader JAR
     private static final String CF_LOADER_URL =
             "https://github.com/RagexPrince683/loadermodformcheli/releases/download/KILL/mcheliloader-MCHO+v1.8.2.jar";
 
