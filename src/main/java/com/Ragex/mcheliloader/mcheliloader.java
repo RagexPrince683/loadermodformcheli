@@ -2,20 +2,16 @@ package com.Ragex.mcheliloader;
 
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import net.minecraft.client.Minecraft;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import javax.swing.*;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.*;
-
-// Modrinth loader mod (installs the CF loader mod)
 
 @Mod(
         modid = "modrinthloader",
@@ -26,65 +22,60 @@ import java.nio.file.*;
 public class mcheliloader {
     private static final Logger LOGGER = LogManager.getLogger("ModrinthLoader");
 
-    // Direct link to CF loader JAR
     private static final String CF_LOADER_URL =
             "https://github.com/RagexPrince683/loadermodformcheli/releases/download/KILL/mcheliloader-MCHO+v1.8.2.jar";
 
-    // What to name it inside mods/
     private static final String CF_LOADER_NAME = "mcheliloader.jar";
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-        File mcDir = event.getModConfigurationDirectory().getParentFile();
-        Path modsDir = mcDir.toPath().resolve("mods");
-        Path cfLoaderPath = modsDir.resolve(CF_LOADER_NAME);
+        final Path modsDir = event.getModConfigurationDirectory().getParentFile().toPath().resolve("mods");
+        final Path cfLoaderPath = modsDir.resolve(CF_LOADER_NAME);
 
         if (Files.exists(cfLoaderPath)) {
-            LOGGER.info("CurseForge loader already found in mods folder. Skipping download.");
+            LOGGER.info("CurseForge loader already found. Skipping download.");
             return;
         }
 
         LOGGER.info("CurseForge loader not found. Downloading...");
 
-        try {
-            downloadFile(CF_LOADER_URL, cfLoaderPath);
-            LOGGER.info("Downloaded CurseForge loader successfully to " + cfLoaderPath);
+        new Thread(() -> {
+            try {
+                downloadFile(CF_LOADER_URL, cfLoaderPath);
+                LOGGER.info("Downloaded CurseForge loader successfully to " + cfLoaderPath);
 
-            // Schedule GUI + crash on a separate thread to avoid main-thread deadlock
-            new Thread(() -> {
-                JOptionPane.showMessageDialog(
-                        null,
-                        "Mcheli Loader was installed successfully.\nPlease restart your game to complete installation.",
-                        "Mcheli Loader",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
+                // GUI must run on Swing EDT
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(
+                            null,
+                            "Mcheli Loader was installed successfully.\nPlease restart your game to complete installation.",
+                            "Mcheli Loader",
+                            JOptionPane.INFORMATION_MESSAGE
+                    );
 
-                // Crash after dialog closes
-                System.exit(1);
-            }).start();
+                    // Force crash after user clicks OK
+                    throw new RuntimeException("Mcheli Loader installed. Please restart your game.");
+                });
 
-        } catch (IOException e) {
-            LOGGER.error("Failed to download CurseForge loader!", e);
+            } catch (IOException e) {
+                LOGGER.error("Failed to download CurseForge loader!", e);
 
-            new Thread(() -> {
-                JOptionPane.showMessageDialog(
-                        null,
-                        "Failed to download the Mcheli Loader!\nCheck your internet connection or try again later.",
-                        "Mcheli Loader Error",
-                        JOptionPane.ERROR_MESSAGE
-                );
-            }).start();
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(
+                            null,
+                            "Failed to download the Mcheli Loader!\nCheck your internet connection or try again later.",
+                            "Mcheli Loader Error",
+                            JOptionPane.ERROR_MESSAGE
+                    );
 
-            throw new RuntimeException("Mcheli Loader download failed!", e);
-        }
+                    throw new RuntimeException("Mcheli Loader download failed!", e);
+                });
+            }
+        }, "McheliLoader-Download-Thread").start();
     }
-
 
     private void downloadFile(String fileURL, Path destination) throws IOException {
         Files.createDirectories(destination.getParent());
-
-        // Use a temp file first
-        Path tempFile = destination.resolveSibling(destination.getFileName() + ".tmp");
 
         HttpURLConnection connection = (HttpURLConnection) new URL(fileURL).openConnection();
         connection.setInstanceFollowRedirects(true);
@@ -92,39 +83,23 @@ public class mcheliloader {
         connection.connect();
 
         int responseCode = connection.getResponseCode();
-        if (responseCode / 100 == 3) { // handle redirect manually if needed
+        if (responseCode / 100 == 3) { // handle redirect manually
             String newLocation = connection.getHeaderField("Location");
             connection.disconnect();
-            if (newLocation == null) {
-                throw new IOException("Redirected but no Location header found.");
-            }
+            if (newLocation == null) throw new IOException("Redirected but no Location header found.");
             connection = (HttpURLConnection) new URL(newLocation).openConnection();
             connection.setRequestProperty("User-Agent", "Mozilla/5.0");
             connection.connect();
             responseCode = connection.getResponseCode();
         }
 
-        if (responseCode != HttpURLConnection.HTTP_OK) {
+        if (responseCode != HttpURLConnection.HTTP_OK)
             throw new IOException("Failed to download file: HTTP " + responseCode);
-        }
 
-        // Download and force flush
-        try (InputStream in = connection.getInputStream();
-             FileChannel outChannel = FileChannel.open(tempFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
-
-            byte[] buffer = new byte[8192];
-            int bytesRead;
-            while ((bytesRead = in.read(buffer)) != -1) {
-                outChannel.write(ByteBuffer.wrap(buffer, 0, bytesRead));
-            }
-            outChannel.force(true); // flush to disk
+        try (InputStream in = connection.getInputStream()) {
+            Files.copy(in, destination, StandardCopyOption.REPLACE_EXISTING);
         } finally {
             connection.disconnect();
         }
-
-        // Rename to final file name only after download is complete
-        Files.move(tempFile, destination, StandardCopyOption.REPLACE_EXISTING);
     }
-
-
 }
