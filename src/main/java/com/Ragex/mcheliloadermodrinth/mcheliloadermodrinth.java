@@ -255,79 +255,132 @@ public class mcheliloadermodrinth {
     }
 
     private static void downloadToFileWithResume(URL url, Path dest, long expectedSize, JProgressBar bar) throws IOException {
+        final int MAX_RETRIES = 6;
+        final int BASE_BACKOFF_MS = 2000;
+
         long existing = Files.exists(dest) ? Files.size(dest) : 0L;
-        final boolean resume = existing > 0;
+        int attempt = 0;
 
-        HttpURLConnection c = (HttpURLConnection) url.openConnection();
-        c.setRequestProperty("User-Agent", "Mozilla/5.0");
-        c.setRequestProperty("Accept", "application/octet-stream");
-        c.setRequestProperty("Accept-Encoding", "identity");
-        c.setConnectTimeout(60_000);  // connect timeout
-        c.setReadTimeout(60_000);     // read timeout to avoid hanging forever on stalled connections
-        if (resume) {
-            c.setRequestProperty("Range", "bytes=" + existing + "-");
-        }
-        c.connect();
-
-        int code = c.getResponseCode();
-        if (resume && code != 206) {
-            // Server didn't honor range; start fresh
-            c.disconnect();
-            Files.deleteIfExists(dest);
-            existing = 0L;
-            downloadToFileWithResume(url, dest, expectedSize, bar);
-            return;
-        }
-        if (!resume && code != 200) {
-            throw new IOException("Unexpected HTTP status " + code + " for download");
-        }
-
-        // Write stream to file (append if resuming)
-        try (InputStream in = new BufferedInputStream(c.getInputStream(), 1 * 1024 * 1024); // 1 MB buffer
-             RandomAccessFile raf = new RandomAccessFile(dest.toFile(), "rw")) {
-
-            if (existing > 0) raf.seek(existing);
-
-            byte[] buffer = new byte[1 * 1024 * 1024]; // 1 MB buffer
-            long downloaded = existing;
-            int n;
-            long sinceFlush = 0L;
-
-            while ((n = in.read(buffer)) != -1) {
-                raf.write(buffer, 0, n);
-                downloaded += n;
-                sinceFlush += n;
-
-                if (expectedSize > 0) {
-                    final int p = (int) ((downloaded * 100) / expectedSize);
-                    if (bar != null) {
-                        SwingUtilities.invokeLater(() -> {
-                            bar.setIndeterminate(false);
-                            bar.setValue(p);
-                            bar.setString(p + "%");
-                        });
-                    }
-                } else {
-                    // if size unknown, keep indeterminate text updated occasionally
-                    if (bar != null) {
-                        final long mb = downloaded / (1024L * 1024L);
-                        SwingUtilities.invokeLater(() -> bar.setString("Downloaded ~" + mb + " MB"));
-                    }
-                }
-
-                // Flush to disk every ~8MB to be safe with giant files
-                if (sinceFlush >= 8L * 1024L * 1024L) {
-                    raf.getFD().sync();
-                    sinceFlush = 0L;
-                }
+        // We'll loop until fully downloaded or until retries exhausted
+        while (true) {
+            if (attempt > 0) {
+                LOGGER.info("Retrying download (attempt " + (attempt+1) + "/" + MAX_RETRIES + ") from byte " + existing);
             }
 
-            // Final fsync to ensure data hits disk
-            raf.getFD().sync();
-        } finally {
-            c.disconnect();
+            HttpURLConnection c = null;
+            try {
+                boolean resume = existing > 0;
+                c = (HttpURLConnection) url.openConnection();
+                c.setRequestProperty("User-Agent", "Mozilla/5.0");
+                c.setRequestProperty("Accept", "application/octet-stream");
+                c.setRequestProperty("Accept-Encoding", "identity");
+                c.setConnectTimeout(120_000); // 120s connect timeout (big file)
+                c.setReadTimeout(120_000);    // 120s read timeout
+
+                if (resume) {
+                    c.setRequestProperty("Range", "bytes=" + existing + "-");
+                }
+
+                c.connect();
+                int code = c.getResponseCode();
+
+                // If we asked for resume and server doesn't honor it, discard partial and restart fresh
+                if (resume && code != 206) {
+                    LOGGER.warn("Server didn't honor Range (code=" + code + "). Deleting partial and restarting from 0.");
+                    c.disconnect();
+                    Files.deleteIfExists(dest);
+                    existing = 0L;
+                    attempt = 0;
+                    continue; // restart loop immediately
+                }
+
+                // If not resuming, expect 200
+                if (!resume && code != 200 && code != 206) {
+                    throw new IOException("Unexpected HTTP status " + code + " for download");
+                }
+
+                // Open streams and append if resuming
+                try (InputStream rawIn = c.getInputStream();
+                     BufferedInputStream in = new BufferedInputStream(rawIn, 1 * 1024 * 1024);
+                     RandomAccessFile raf = new RandomAccessFile(dest.toFile(), "rw")) {
+
+                    if (existing > 0) raf.seek(existing);
+
+                    byte[] buffer = new byte[1 * 1024 * 1024]; // 1 MB
+                    long downloaded = existing;
+                    long sinceFlush = 0L;
+                    int n;
+
+                    // If we have a known expectedSize and bar, ensure it's not indeterminate
+                    if (expectedSize > 0 && bar != null) {
+                        SwingUtilities.invokeLater(() -> {
+                            bar.setIndeterminate(false);
+                        });
+                    }
+
+                    while ((n = in.read(buffer)) != -1) {
+                        raf.write(buffer, 0, n);
+                        downloaded += n;
+                        sinceFlush += n;
+
+                        // Update progress bar if available and expectedSize is known
+                        if (expectedSize > 0 && bar != null) {
+                            final int p = (int) ((downloaded * 100) / expectedSize);
+                            SwingUtilities.invokeLater(() -> {
+                                bar.setIndeterminate(false);
+                                bar.setValue(Math.min(100, p));
+                                bar.setString(Math.min(100, p) + "%");
+                            });
+                        } else if (bar != null) {
+                            // update MB downloaded for unknown size occasionally
+                            final long mb = downloaded / (1024L * 1024L);
+                            SwingUtilities.invokeLater(() -> bar.setString("Downloaded ~" + mb + " MB"));
+                        }
+
+                        // Flush to disk every ~8 MB
+                        if (sinceFlush >= 8L * 1024L * 1024L) {
+                            raf.getFD().sync();
+                            sinceFlush = 0L;
+                        }
+                    }
+
+                    // Final fsync
+                    raf.getFD().sync();
+                    // Completed the download successfully — exit loop
+                    return;
+                }
+            } catch (IOException ioe) {
+                // Log and prepare to retry
+                LOGGER.warn("Download IO error on attempt " + (attempt+1) + ": " + ioe.getMessage(), ioe);
+
+                attempt++;
+                if (attempt >= MAX_RETRIES) {
+                    // give up after exhausting retries
+                    throw new IOException("Download failed after " + attempt + " attempts: " + ioe.getMessage(), ioe);
+                }
+
+                // update 'existing' in case some bytes were written before the error
+                try {
+                    existing = Files.exists(dest) ? Files.size(dest) : 0L;
+                } catch (IOException ex) {
+                    existing = 0L;
+                }
+
+                // Exponential backoff
+                try {
+                    long backoff = BASE_BACKOFF_MS * (1L << Math.min(5, attempt - 1));
+                    LOGGER.info("Waiting " + backoff + "ms before retry");
+                    Thread.sleep(backoff);
+                } catch (InterruptedException ignored) {}
+                // loop and reconnect/resume
+            } finally {
+                if (c != null) {
+                    try { c.disconnect(); } catch (Exception ignored) {}
+                }
+            }
         }
     }
+
 
     // === Validation helpers ===
 
