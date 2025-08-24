@@ -76,10 +76,14 @@ public class mcheliloadermodrinth {
         final boolean[] workerAborted   = new boolean[] { false };
 
         final Thread worker = new Thread(() -> {
+            final int MAX_WORKER_ATTEMPTS = 30;
+            final long WORKER_BACKOFF_MS = 2000L;
+
             try {
-                // We'll loop until successful or user aborts via the Retry/Abort prompt
+                int attempts = 0;
                 while (!workerSucceeded[0] && !workerAborted[0]) {
                     try {
+                        attempts++;
                         URL resolved = resolveFinalURL(CF_LOADER_URL);
                         long remoteSize = probeRemoteSize(resolved);
 
@@ -112,7 +116,7 @@ public class mcheliloadermodrinth {
                             }
                         }
 
-                        // Attempt the download. This method retries internally on transient IO errors.
+                        // Attempt the download. This method already has internal retries for IO hiccups.
                         downloadToFileWithResume(resolved, tempFile, remoteSize, progressBar);
 
                         // After download method returns, we should have the complete tempFile
@@ -140,49 +144,37 @@ public class mcheliloadermodrinth {
 
                         LOGGER.info("Mcheli loader installed successfully.");
                         workerSucceeded[0] = true;
-                        break; // exit loop
+                        break; // success
                     } catch (Throwable t) {
-                        LOGGER.error("Mcheli loader download attempt failed", t);
+                        LOGGER.error("Mcheli loader download attempt " + attempts + " failed", t);
 
-                        // Ask user whether to retry or abort — do this on EDT and block until user answers
-                        final int[] userChoice = new int[1];
-                        try {
-                            SwingUtilities.invokeAndWait(() -> {
-                                Object[] options = {"Retry", "Abort"};
-                                userChoice[0] = JOptionPane.showOptionDialog(
-                                        null,
-                                        "Failed to download Mcheli Loader:\n" + t.getMessage() + "\n\nRetry or Abort?",
-                                        "Mcheli Loader Error",
-                                        JOptionPane.YES_NO_OPTION,
-                                        JOptionPane.ERROR_MESSAGE,
-                                        null,
-                                        options,
-                                        options[0]
-                                );
-                            });
-                        } catch (Exception swingEx) {
-                            // If EDT call fails, abort
-                            LOGGER.error("Failed to show retry dialog", swingEx);
+                        if (attempts >= MAX_WORKER_ATTEMPTS) {
+                            // copy mutable locals into effectively-final locals for use inside the lambda
+                            final int attemptsCopy = attempts;
+                            final String errMsg = t == null ? "unknown error" : t.getMessage();
+
+                            // give up after max attempts: report error once, abort installer, let game continue
+                            LOGGER.error("Exceeded max download attempts (" + MAX_WORKER_ATTEMPTS + "). Aborting download.");
                             workerAborted[0] = true;
-                            break;
-                        }
 
-                        if (userChoice[0] == JOptionPane.YES_OPTION) {
-                            // Retry chosen: loop again (downloadToFileWithResume will resume from .part if present)
-                            LOGGER.info("User chose Retry — will attempt download again.");
-                            // slight sleep to avoid immediate hammering
-                            try { Thread.sleep(1000L); } catch (InterruptedException ignored) {}
-                            continue;
+                            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                                    null,
+                                    "Failed to download Mcheli Loader after " + attemptsCopy + " attempts:\n" + errMsg,
+                                    "Mcheli Loader Error",
+                                    JOptionPane.ERROR_MESSAGE
+                            ));
+                            break;
                         } else {
-                            // Abort chosen
-                            LOGGER.info("User chose Abort. Will stop download and continue without installing.");
-                            workerAborted[0] = true;
-                            break;
+                            // exponential backoff then retry automatically
+                            long backoff = WORKER_BACKOFF_MS * (1L << Math.min(6, attempts - 1));
+                            LOGGER.info("Retrying download in " + backoff + "ms (attempt " + (attempts + 1) + ")");
+                            try { Thread.sleep(backoff); } catch (InterruptedException ignored) {}
+                            // loop will retry
                         }
                     }
-                } // end while
+                }
             } finally {
-                // Make sure dialog closes (done on EDT)
+                // Ensure dialog goes away on EDT
                 SwingUtilities.invokeLater(dialog::dispose);
             }
         }, "Mcheli-Loader-Downloader");
