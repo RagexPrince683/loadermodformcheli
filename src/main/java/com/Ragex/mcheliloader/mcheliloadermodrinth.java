@@ -13,14 +13,14 @@ import java.nio.file.*;
 import java.util.Enumeration;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-
+//modrinth
 @Mod(
         modid = "modrinthloader",
         name = "Modrinth Loader",
         version = "1.0",
         dependencies = "required-after:Forge@[10.13.2.1230,)"
 )
-public class mcheliloader {
+public class mcheliloadermodrinth {
 
     private static final Logger LOGGER = LogManager.getLogger("ModrinthLoader");
 
