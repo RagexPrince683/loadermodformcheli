@@ -13,6 +13,7 @@ import java.nio.file.*;
 import java.util.Enumeration;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+
 //modrinth
 @Mod(
         modid = "modrinthloader",
@@ -54,52 +55,134 @@ public class mcheliloadermodrinth {
             }
         } catch (IOException ignored) {}
 
-        // Download thread
-        Thread downloadThread = new Thread(() -> {
+        LOGGER.info("Mcheli loader not found. Starting blocking download...");
+
+        // Use a .part file while downloading
+        Path tempFile = finalFile.resolveSibling(CF_LOADER_NAME + ".part");
+
+        // Build a modal progress dialog that blocks the game until finished
+        final JProgressBar progressBar = new JProgressBar(0, 100);
+        progressBar.setStringPainted(true);
+        progressBar.setValue(0);
+
+        final JOptionPane optionPane = new JOptionPane(progressBar, JOptionPane.INFORMATION_MESSAGE,
+                JOptionPane.DEFAULT_OPTION, null, new Object[]{}, null);
+        final JDialog dialog = optionPane.createDialog("Downloading Mcheli Loader (do not close)");
+        dialog.setModal(true);
+        dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+        final Thread worker = new Thread(() -> {
             try {
-                Path tempFile = finalFile.resolveSibling(CF_LOADER_NAME + ".part");
                 URL resolved = resolveFinalURL(CF_LOADER_URL);
                 long remoteSize = probeRemoteSize(resolved);
-                downloadToFileWithResume(resolved, tempFile, remoteSize, null); // No GUI progress bar
 
-                if (!isJarValid(tempFile)) {
-                    throw new IOException("Downloaded file is not a valid JAR");
+                // If remote size unknown, show indeterminate progress
+                if (remoteSize <= 0) {
+                    SwingUtilities.invokeLater(() -> {
+                        progressBar.setIndeterminate(true);
+                        progressBar.setString("Downloading (size unknown)...");
+                    });
+                } else {
+                    final long expected = remoteSize;
+                    SwingUtilities.invokeLater(() -> {
+                        progressBar.setIndeterminate(false);
+                        progressBar.setValue(0);
+                        progressBar.setString("0%");
+                    });
+
+                    // If there's an existing .part file, show resumed percentage immediately
+                    long existing = 0L;
+                    if (Files.exists(tempFile)) {
+                        try { existing = Files.size(tempFile); } catch (IOException ignored) {}
+                        if (existing > 0 && existing < expected) {
+                            final int p = (int) ((existing * 100) / expected);
+                            SwingUtilities.invokeLater(() -> {
+                                progressBar.setIndeterminate(false);
+                                progressBar.setValue(p);
+                                progressBar.setString(p + "% (resuming)");
+                            });
+                        }
+                    }
                 }
 
-                Files.move(tempFile, finalFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                // Perform the actual download (supports resume). Pass progressBar so it updates.
+                downloadToFileWithResume(resolved, tempFile, remoteSize, progressBar);
+
+                // Extra integrity checks before renaming
+                if (remoteSize > 0) {
+                    long got = Files.size(tempFile);
+                    if (got != remoteSize) {
+                        throw new IOException("Size mismatch: expected " + remoteSize + ", got " + got);
+                    }
+                }
+
+                if (!isJarValid(tempFile)) {
+                    throw new IOException("Downloaded file is not a valid JAR (zip parse failed)");
+                }
+
+                if (EXPECTED_SHA256 != null && !EXPECTED_SHA256.trim().isEmpty()) {
+                    String gotHash = sha256(tempFile);
+                    if (!EXPECTED_SHA256.equalsIgnoreCase(gotHash)) {
+                        throw new IOException("SHA-256 mismatch: got " + gotHash + ", expected " + EXPECTED_SHA256);
+                    }
+                }
+
+                // Move into place (no ATOMIC_MOVE to avoid platform issues)
+                Files.move(tempFile, finalFile, StandardCopyOption.REPLACE_EXISTING);
+
                 LOGGER.info("Mcheli loader installed successfully.");
             } catch (Throwable t) {
-                LOGGER.error("Download failed", t);
-                throw new RuntimeException("Mcheli Loader download failed: " + t.getMessage(), t);
+                LOGGER.error("Mcheli loader download failed", t);
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                        null,
+                        "Failed to download Mcheli Loader:\n" + t.getMessage(),
+                        "Mcheli Loader Error",
+                        JOptionPane.ERROR_MESSAGE
+                ));
+            } finally {
+                // Ensure dialog goes away
+                SwingUtilities.invokeLater(dialog::dispose);
             }
         }, "Mcheli-Loader-Downloader");
 
-        downloadThread.start();
+        // Start worker and show modal dialog (dialog blocks current thread until disposed)
+        worker.start();
+        dialog.setVisible(true); // BLOCK here until worker disposes
 
-        // Wait for download to finish safely
+        // Ensure worker finished (should be, since it disposes dialog at the end)
         try {
-            downloadThread.join(); // Blocks until fully downloaded
+            worker.join();
         } catch (InterruptedException e) {
             throw new RuntimeException("Download interrupted", e);
         }
 
-        // Verify one last time
+        // Verify one last time, then prompt the user to restart. Only after they dismiss the dialog we throw to force restart.
         try {
             if (Files.exists(finalFile) && isJarValid(finalFile)) {
-                LOGGER.info("Mcheli Loader installed. Please restart your game.");
-                JOptionPane.showMessageDialog(null,
-                        "Mcheli Loader installed successfully.\nPlease restart your game.",
+                LOGGER.info("Mcheli Loader installed. Prompting user to restart.");
+                int res = JOptionPane.showOptionDialog(
+                        null,
+                        "Mcheli Loader installed successfully.\nClick Restart to close the game and install.\n(Seriously: restart the game.)",
                         "Mcheli Loader",
-                        JOptionPane.INFORMATION_MESSAGE);
-                throw new RuntimeException("Restart required after installing Mcheli Loader.");
+                        JOptionPane.DEFAULT_OPTION,
+                        JOptionPane.INFORMATION_MESSAGE,
+                        null,
+                        new Object[] {"Restart", "Cancel"},
+                        "Restart"
+                );
+                // If user clicked the Restart button (index 0), throw runtime to force crash/restart.
+                if (res == 0) {
+                    throw new RuntimeException("Mcheli Loader installed. Please restart your game.");
+                } else {
+                    LOGGER.info("User chose not to restart now.");
+                }
             } else {
-                throw new RuntimeException("Mcheli Loader not installed correctly.");
+                throw new RuntimeException("Mcheli Loader not installed; see logs above.");
             }
         } catch (IOException e) {
-            throw new RuntimeException("Verification failed", e);
+            throw new RuntimeException("Mcheli Loader verification failed", e);
         }
     }
-
 
     // === Networking helpers ===
 
@@ -133,6 +216,8 @@ public class mcheliloadermodrinth {
         c.setRequestProperty("Accept-Encoding", "identity");
         // Range trick: ask for just the first byte so server returns Content-Range: bytes 0-0/TOTAL
         c.setRequestProperty("Range", "bytes=0-0");
+        c.setConnectTimeout(15_000);
+        c.setReadTimeout(15_000);
         c.connect();
         try {
             int code = c.getResponseCode();
@@ -159,6 +244,8 @@ public class mcheliloadermodrinth {
         c.setRequestProperty("Accept", "application/octet-stream");
         c.setRequestProperty("Accept-Encoding", "identity");
         c.setRequestMethod("HEAD");
+        c.setConnectTimeout(15_000);
+        c.setReadTimeout(15_000);
         try {
             c.connect();
             return c.getHeaderField("Content-Type");
@@ -175,6 +262,8 @@ public class mcheliloadermodrinth {
         c.setRequestProperty("User-Agent", "Mozilla/5.0");
         c.setRequestProperty("Accept", "application/octet-stream");
         c.setRequestProperty("Accept-Encoding", "identity");
+        c.setConnectTimeout(60_000);  // connect timeout
+        c.setReadTimeout(60_000);     // read timeout to avoid hanging forever on stalled connections
         if (resume) {
             c.setRequestProperty("Range", "bytes=" + existing + "-");
         }
@@ -209,29 +298,36 @@ public class mcheliloadermodrinth {
                 downloaded += n;
                 sinceFlush += n;
 
-                if (expectedSize > 0 && bar != null) {
+                if (expectedSize > 0) {
                     final int p = (int) ((downloaded * 100) / expectedSize);
-                    SwingUtilities.invokeLater(() -> {
-                        bar.setIndeterminate(false);
-                        bar.setValue(p);
-                        bar.setString(p + "%");
-                    });
+                    if (bar != null) {
+                        SwingUtilities.invokeLater(() -> {
+                            bar.setIndeterminate(false);
+                            bar.setValue(p);
+                            bar.setString(p + "%");
+                        });
+                    }
+                } else {
+                    // if size unknown, keep indeterminate text updated occasionally
+                    if (bar != null) {
+                        final long mb = downloaded / (1024L * 1024L);
+                        SwingUtilities.invokeLater(() -> bar.setString("Downloaded ~" + mb + " MB"));
+                    }
                 }
 
-                // Flush every 8 MB instead of 32 MB
+                // Flush to disk every ~8MB to be safe with giant files
                 if (sinceFlush >= 8L * 1024L * 1024L) {
                     raf.getFD().sync();
                     sinceFlush = 0L;
                 }
             }
 
-            // Final fsync to ensure all data hits disk
+            // Final fsync to ensure data hits disk
             raf.getFD().sync();
         } finally {
             c.disconnect();
         }
     }
-
 
     // === Validation helpers ===
 
