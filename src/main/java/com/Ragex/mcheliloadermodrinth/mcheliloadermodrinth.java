@@ -46,142 +46,60 @@ public class mcheliloadermodrinth {
             throw new RuntimeException("Cannot create mods directory", e);
         }
 
-        // If already present and looks valid, skip
-        if (Files.exists(finalFile)) {
+        try {
+            // If already present and valid, skip
+            if (Files.exists(finalFile) && isJarValid(finalFile)) {
+                LOGGER.info("Mcheli loader already present and valid. Skipping download.");
+                return;
+            }
+        } catch (IOException ignored) {}
+
+        // Download thread
+        Thread downloadThread = new Thread(() -> {
             try {
-                if (isJarValid(finalFile)) {
-                    LOGGER.info("Mcheli loader already present and valid. Skipping download.");
-                    return;
-                } else {
-                    LOGGER.warn("Existing Mcheli loader appears invalid. Will re-download.");
-                    Files.deleteIfExists(finalFile);
-                }
-            } catch (IOException ignored) {}
-        }
-
-        LOGGER.info("Mcheli loader not found. Starting blocking download...");
-
-        // Use a .part file while downloading
-        Path tempFile = finalFile.resolveSibling(CF_LOADER_NAME + ".part");
-
-        // Build a modal progress dialog that blocks the game until finished
-        final JProgressBar progressBar = new JProgressBar(0, 100);
-        progressBar.setStringPainted(true);
-        progressBar.setValue(0);
-
-        final JOptionPane optionPane = new JOptionPane(progressBar, JOptionPane.INFORMATION_MESSAGE,
-                JOptionPane.DEFAULT_OPTION, null, new Object[]{}, null);
-        final JDialog dialog = optionPane.createDialog("Downloading Mcheli Loader (do not close)");
-        dialog.setModal(true);
-        dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-
-        final Thread worker = new Thread(() -> {
-            try {
-                // Resolve the final redirect URL (GitHub -> S3) so we can probe size and download cleanly
+                Path tempFile = finalFile.resolveSibling(CF_LOADER_NAME + ".part");
                 URL resolved = resolveFinalURL(CF_LOADER_URL);
-
-                // Probe server for size without downloading everything (range trick)
                 long remoteSize = probeRemoteSize(resolved);
-                if (remoteSize <= 0) {
-                    LOGGER.warn("Server did not report a stable size; progress may be inaccurate.");
-                }
-
-                // Sanity check (avoid saving HTML errors masquerading as JAR)
-                String contentType = probeContentType(resolved);
-                if (contentType != null && (contentType.startsWith("text/") || contentType.contains("html"))) {
-                    throw new IOException("Remote URL returned HTML/text; not a binary JAR (" + contentType + ")");
-                }
-
-                // If we know the file is ~1GB, enforce a lower bound so partial/HTML files are rejected
-                if (remoteSize > 0 && remoteSize < MIN_EXPECTED_BYTES) {
-                    LOGGER.warn("Remote size (" + remoteSize + ") is unexpectedly small (<" + MIN_EXPECTED_BYTES + ")");
-                }
-
-                // Resume support if a previous partial exists
-                long resumeAt = 0L;
-                if (Files.exists(tempFile)) {
-                    try { resumeAt = Files.size(tempFile); } catch (IOException ignored) {}
-                }
-
-                // Switch to indeterminate if we don't know size
-                if (remoteSize <= 0) {
-                    SwingUtilities.invokeLater(() -> {
-                        progressBar.setIndeterminate(true);
-                        progressBar.setString("Downloading (size unknown)...");
-                    });
-                } else {
-                    final long expected = remoteSize;
-                    SwingUtilities.invokeLater(() -> progressBar.setString("0%"));
-
-                    // Ensure resume is not beyond expected
-                    if (resumeAt > 0 && resumeAt < expected) {
-                        final int p = (int) ((resumeAt * 100) / expected);
-                        SwingUtilities.invokeLater(() -> {
-                            progressBar.setIndeterminate(false);
-                            progressBar.setValue(p);
-                            progressBar.setString(p + "% (resuming)");
-                        });
-                    }
-                }
-
-                // Perform the actual download (supports resume)
-                downloadToFileWithResume(resolved, tempFile, remoteSize, progressBar);
-
-                // Extra integrity checks before renaming
-                if (remoteSize > 0) {
-                    long got = Files.size(tempFile);
-                    if (got != remoteSize) {
-                        throw new IOException("Size mismatch: expected " + remoteSize + ", got " + got);
-                    }
-                }
+                downloadToFileWithResume(resolved, tempFile, remoteSize, null); // No GUI progress bar
 
                 if (!isJarValid(tempFile)) {
-                    throw new IOException("Downloaded file is not a valid JAR (zip parse failed)");
+                    throw new IOException("Downloaded file is not a valid JAR");
                 }
 
-                if (EXPECTED_SHA256 != null && !EXPECTED_SHA256.trim().isEmpty()) {
-                    String gotHash = sha256(tempFile);
-                    if (!EXPECTED_SHA256.equalsIgnoreCase(gotHash)) {
-                        throw new IOException("SHA-256 mismatch: got " + gotHash + ", expected " + EXPECTED_SHA256);
-                    }
-                }
-
-                // Atomically move into place
                 Files.move(tempFile, finalFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-
+                LOGGER.info("Mcheli loader installed successfully.");
             } catch (Throwable t) {
-                LOGGER.error("Mcheli loader download failed", t);
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
-                        null,
-                        "Failed to download Mcheli Loader:\n" + t.getMessage(),
-                        "Mcheli Loader Error",
-                        JOptionPane.ERROR_MESSAGE
-                ));
-            } finally {
-                SwingUtilities.invokeLater(dialog::dispose);
+                LOGGER.error("Download failed", t);
+                throw new RuntimeException("Mcheli Loader download failed: " + t.getMessage(), t);
             }
         }, "Mcheli-Loader-Downloader");
 
-        worker.start();
-        dialog.setVisible(true); // BLOCK here until worker disposes
+        downloadThread.start();
 
-        // If the file is present and valid now, announce and crash to force restart
+        // Wait for download to finish safely
+        try {
+            downloadThread.join(); // Blocks until fully downloaded
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Download interrupted", e);
+        }
+
+        // Verify one last time
         try {
             if (Files.exists(finalFile) && isJarValid(finalFile)) {
-                JOptionPane.showMessageDialog(
-                        null,
+                LOGGER.info("Mcheli Loader installed. Please restart your game.");
+                JOptionPane.showMessageDialog(null,
                         "Mcheli Loader installed successfully.\nPlease restart your game.",
                         "Mcheli Loader",
-                        JOptionPane.INFORMATION_MESSAGE
-                );
-                throw new RuntimeException("Mcheli Loader installed. Please restart your game.");
+                        JOptionPane.INFORMATION_MESSAGE);
+                throw new RuntimeException("Restart required after installing Mcheli Loader.");
             } else {
-                throw new RuntimeException("Mcheli Loader not installed; see logs above.");
+                throw new RuntimeException("Mcheli Loader not installed correctly.");
             }
         } catch (IOException e) {
-            throw new RuntimeException("Mcheli Loader verification failed", e);
+            throw new RuntimeException("Verification failed", e);
         }
     }
+
 
     // === Networking helpers ===
 
