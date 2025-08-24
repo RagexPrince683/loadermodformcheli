@@ -71,76 +71,118 @@ public class mcheliloadermodrinth {
         dialog.setModal(true);
         dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
 
+        // Flags to communicate worker result
+        final boolean[] workerSucceeded = new boolean[] { false };
+        final boolean[] workerAborted   = new boolean[] { false };
+
         final Thread worker = new Thread(() -> {
             try {
-                URL resolved = resolveFinalURL(CF_LOADER_URL);
-                long remoteSize = probeRemoteSize(resolved);
+                // We'll loop until successful or user aborts via the Retry/Abort prompt
+                while (!workerSucceeded[0] && !workerAborted[0]) {
+                    try {
+                        URL resolved = resolveFinalURL(CF_LOADER_URL);
+                        long remoteSize = probeRemoteSize(resolved);
 
-                // If remote size unknown, show indeterminate progress
-                if (remoteSize <= 0) {
-                    SwingUtilities.invokeLater(() -> {
-                        progressBar.setIndeterminate(true);
-                        progressBar.setString("Downloading (size unknown)...");
-                    });
-                } else {
-                    final long expected = remoteSize;
-                    SwingUtilities.invokeLater(() -> {
-                        progressBar.setIndeterminate(false);
-                        progressBar.setValue(0);
-                        progressBar.setString("0%");
-                    });
-
-                    // If there's an existing .part file, show resumed percentage immediately
-                    long existing = 0L;
-                    if (Files.exists(tempFile)) {
-                        try { existing = Files.size(tempFile); } catch (IOException ignored) {}
-                        if (existing > 0 && existing < expected) {
-                            final int p = (int) ((existing * 100) / expected);
+                        // If remote size unknown, show indeterminate progress
+                        if (remoteSize <= 0) {
+                            SwingUtilities.invokeLater(() -> {
+                                progressBar.setIndeterminate(true);
+                                progressBar.setString("Downloading (size unknown)...");
+                            });
+                        } else {
+                            final long expected = remoteSize;
                             SwingUtilities.invokeLater(() -> {
                                 progressBar.setIndeterminate(false);
-                                progressBar.setValue(p);
-                                progressBar.setString(p + "% (resuming)");
+                                progressBar.setValue(0);
+                                progressBar.setString("0%");
                             });
+
+                            // If there's an existing .part file, show resumed percentage immediately
+                            long existing = 0L;
+                            if (Files.exists(tempFile)) {
+                                try { existing = Files.size(tempFile); } catch (IOException ignored) {}
+                                if (existing > 0 && existing < expected) {
+                                    final int p = (int) ((existing * 100) / expected);
+                                    SwingUtilities.invokeLater(() -> {
+                                        progressBar.setIndeterminate(false);
+                                        progressBar.setValue(p);
+                                        progressBar.setString(p + "% (resuming)");
+                                    });
+                                }
+                            }
+                        }
+
+                        // Attempt the download. This method retries internally on transient IO errors.
+                        downloadToFileWithResume(resolved, tempFile, remoteSize, progressBar);
+
+                        // After download method returns, we should have the complete tempFile
+                        // Extra integrity checks before renaming
+                        if (remoteSize > 0) {
+                            long got = Files.size(tempFile);
+                            if (got != remoteSize) {
+                                throw new IOException("Size mismatch: expected " + remoteSize + ", got " + got);
+                            }
+                        }
+
+                        if (!isJarValid(tempFile)) {
+                            throw new IOException("Downloaded file is not a valid JAR (zip parse failed)");
+                        }
+
+                        if (EXPECTED_SHA256 != null && !EXPECTED_SHA256.trim().isEmpty()) {
+                            String gotHash = sha256(tempFile);
+                            if (!EXPECTED_SHA256.equalsIgnoreCase(gotHash)) {
+                                throw new IOException("SHA-256 mismatch: got " + gotHash + ", expected " + EXPECTED_SHA256);
+                            }
+                        }
+
+                        // Move into place (no ATOMIC_MOVE to avoid platform issues)
+                        Files.move(tempFile, finalFile, StandardCopyOption.REPLACE_EXISTING);
+
+                        LOGGER.info("Mcheli loader installed successfully.");
+                        workerSucceeded[0] = true;
+                        break; // exit loop
+                    } catch (Throwable t) {
+                        LOGGER.error("Mcheli loader download attempt failed", t);
+
+                        // Ask user whether to retry or abort — do this on EDT and block until user answers
+                        final int[] userChoice = new int[1];
+                        try {
+                            SwingUtilities.invokeAndWait(() -> {
+                                Object[] options = {"Retry", "Abort"};
+                                userChoice[0] = JOptionPane.showOptionDialog(
+                                        null,
+                                        "Failed to download Mcheli Loader:\n" + t.getMessage() + "\n\nRetry or Abort?",
+                                        "Mcheli Loader Error",
+                                        JOptionPane.YES_NO_OPTION,
+                                        JOptionPane.ERROR_MESSAGE,
+                                        null,
+                                        options,
+                                        options[0]
+                                );
+                            });
+                        } catch (Exception swingEx) {
+                            // If EDT call fails, abort
+                            LOGGER.error("Failed to show retry dialog", swingEx);
+                            workerAborted[0] = true;
+                            break;
+                        }
+
+                        if (userChoice[0] == JOptionPane.YES_OPTION) {
+                            // Retry chosen: loop again (downloadToFileWithResume will resume from .part if present)
+                            LOGGER.info("User chose Retry — will attempt download again.");
+                            // slight sleep to avoid immediate hammering
+                            try { Thread.sleep(1000L); } catch (InterruptedException ignored) {}
+                            continue;
+                        } else {
+                            // Abort chosen
+                            LOGGER.info("User chose Abort. Will stop download and continue without installing.");
+                            workerAborted[0] = true;
+                            break;
                         }
                     }
-                }
-
-                // Perform the actual download (supports resume). Pass progressBar so it updates.
-                downloadToFileWithResume(resolved, tempFile, remoteSize, progressBar);
-
-                // Extra integrity checks before renaming
-                if (remoteSize > 0) {
-                    long got = Files.size(tempFile);
-                    if (got != remoteSize) {
-                        throw new IOException("Size mismatch: expected " + remoteSize + ", got " + got);
-                    }
-                }
-
-                if (!isJarValid(tempFile)) {
-                    throw new IOException("Downloaded file is not a valid JAR (zip parse failed)");
-                }
-
-                if (EXPECTED_SHA256 != null && !EXPECTED_SHA256.trim().isEmpty()) {
-                    String gotHash = sha256(tempFile);
-                    if (!EXPECTED_SHA256.equalsIgnoreCase(gotHash)) {
-                        throw new IOException("SHA-256 mismatch: got " + gotHash + ", expected " + EXPECTED_SHA256);
-                    }
-                }
-
-                // Move into place (no ATOMIC_MOVE to avoid platform issues)
-                Files.move(tempFile, finalFile, StandardCopyOption.REPLACE_EXISTING);
-
-                LOGGER.info("Mcheli loader installed successfully.");
-            } catch (Throwable t) {
-                LOGGER.error("Mcheli loader download failed", t);
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
-                        null,
-                        "Failed to download Mcheli Loader:\n" + t.getMessage(),
-                        "Mcheli Loader Error",
-                        JOptionPane.ERROR_MESSAGE
-                ));
+                } // end while
             } finally {
-                // Ensure dialog goes away
+                // Make sure dialog closes (done on EDT)
                 SwingUtilities.invokeLater(dialog::dispose);
             }
         }, "Mcheli-Loader-Downloader");
@@ -156,7 +198,13 @@ public class mcheliloadermodrinth {
             throw new RuntimeException("Download interrupted", e);
         }
 
-        // Verify one last time, then prompt the user to restart. Only after they dismiss the dialog we throw to force restart.
+        // If user aborted (chose Abort on failure), just continue the game without crashing
+        if (workerAborted[0]) {
+            LOGGER.warn("Mcheli loader download aborted by user. Continuing without the loader.");
+            return;
+        }
+
+        // If succeeded, finalFile should exist and be valid — prompt to restart. Only crash if user chooses Restart.
         try {
             if (Files.exists(finalFile) && isJarValid(finalFile)) {
                 LOGGER.info("Mcheli Loader installed. Prompting user to restart.");
@@ -177,6 +225,7 @@ public class mcheliloadermodrinth {
                     LOGGER.info("User chose not to restart now.");
                 }
             } else {
+                // Not installed and not aborted -> something went wrong (shouldn't happen because worker sets flags)
                 throw new RuntimeException("Mcheli Loader not installed; see logs above.");
             }
         } catch (IOException e) {
@@ -254,6 +303,7 @@ public class mcheliloadermodrinth {
         }
     }
 
+    // Resumable downloader with internal retries (drop-in replacement)
     private static void downloadToFileWithResume(URL url, Path dest, long expectedSize, JProgressBar bar) throws IOException {
         final int MAX_RETRIES = 6;
         final int BASE_BACKOFF_MS = 2000;
@@ -293,23 +343,20 @@ public class mcheliloadermodrinth {
                     attempt = 0;
                     continue; // restart loop immediately
                 }
-
-                // If not resuming, expect 200
                 if (!resume && code != 200 && code != 206) {
                     throw new IOException("Unexpected HTTP status " + code + " for download");
                 }
 
-                // Open streams and append if resuming
-                try (InputStream rawIn = c.getInputStream();
-                     BufferedInputStream in = new BufferedInputStream(rawIn, 1 * 1024 * 1024);
+                // Write stream to file (append if resuming)
+                try (InputStream in = new BufferedInputStream(c.getInputStream(), 1 * 1024 * 1024);
                      RandomAccessFile raf = new RandomAccessFile(dest.toFile(), "rw")) {
 
                     if (existing > 0) raf.seek(existing);
 
-                    byte[] buffer = new byte[1 * 1024 * 1024]; // 1 MB
+                    byte[] buffer = new byte[1 * 1024 * 1024]; // 1 MB buffer
                     long downloaded = existing;
-                    long sinceFlush = 0L;
                     int n;
+                    long sinceFlush = 0L;
 
                     // If we have a known expectedSize and bar, ensure it's not indeterminate
                     if (expectedSize > 0 && bar != null) {
@@ -323,7 +370,6 @@ public class mcheliloadermodrinth {
                         downloaded += n;
                         sinceFlush += n;
 
-                        // Update progress bar if available and expectedSize is known
                         if (expectedSize > 0 && bar != null) {
                             final int p = (int) ((downloaded * 100) / expectedSize);
                             SwingUtilities.invokeLater(() -> {
@@ -332,23 +378,25 @@ public class mcheliloadermodrinth {
                                 bar.setString(Math.min(100, p) + "%");
                             });
                         } else if (bar != null) {
-                            // update MB downloaded for unknown size occasionally
                             final long mb = downloaded / (1024L * 1024L);
                             SwingUtilities.invokeLater(() -> bar.setString("Downloaded ~" + mb + " MB"));
                         }
 
-                        // Flush to disk every ~8 MB
+                        // Flush to disk every ~8MB to be safe with giant files
                         if (sinceFlush >= 8L * 1024L * 1024L) {
                             raf.getFD().sync();
                             sinceFlush = 0L;
                         }
                     }
 
-                    // Final fsync
+                    // Final fsync to ensure data hits disk
                     raf.getFD().sync();
-                    // Completed the download successfully — exit loop
-                    return;
+                } finally {
+                    if (c != null) { c.disconnect(); }
                 }
+
+                // Completed successfully
+                return;
             } catch (IOException ioe) {
                 // Log and prepare to retry
                 LOGGER.warn("Download IO error on attempt " + (attempt+1) + ": " + ioe.getMessage(), ioe);
@@ -374,13 +422,10 @@ public class mcheliloadermodrinth {
                 } catch (InterruptedException ignored) {}
                 // loop and reconnect/resume
             } finally {
-                if (c != null) {
-                    try { c.disconnect(); } catch (Exception ignored) {}
-                }
+                // nothing here
             }
         }
     }
-
 
     // === Validation helpers ===
 
