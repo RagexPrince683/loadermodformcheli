@@ -14,7 +14,7 @@ import java.net.URL;
 @Mod(modid = "mcho_installer", version = "1.0")
 public class mcheliloadermodrinth {
 
-    private static final String DOWNLOAD_URL = "https://github.com/YourUser/YourRepo/releases/download/v1.0/MCHO.jar";
+    private static final String DOWNLOAD_URL = "https://github.com/RagexPrince683/loadermodformcheli/releases/download/KILL/mcheliloader-MCHO+v1.8.2.jar";
     private static final String TARGET_NAME = "MCHO.jar";
     private static boolean installed = false;
 
