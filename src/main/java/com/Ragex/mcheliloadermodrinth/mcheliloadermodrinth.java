@@ -205,27 +205,51 @@ public class mcheliloadermodrinth {
         }
 
         // If succeeded, finalFile should exist and be valid — prompt to restart. Only crash if user chooses Restart.
+        // Verify one last time, then prompt the user to restart. Only crash if user chooses Restart.
         try {
             if (Files.exists(finalFile) && isJarValid(finalFile)) {
                 LOGGER.info("Mcheli Loader installed. Prompting user to restart.");
-                int res = JOptionPane.showOptionDialog(
-                        null,
-                        "Mcheli Loader installed successfully.\nClick Restart to close the game and install.\n(Seriously: restart the game.)",
-                        "Mcheli Loader",
-                        JOptionPane.DEFAULT_OPTION,
-                        JOptionPane.INFORMATION_MESSAGE,
-                        null,
-                        new Object[] {"Restart", "Cancel"},
-                        "Restart"
-                );
-                // If user clicked the Restart button (index 0), throw runtime to force crash/restart.
-                if (res == 0) {
+
+                final int[] choice = new int[1]; // 0 = Restart, 1 = Cancel
+
+                try {
+                    SwingUtilities.invokeAndWait(() -> {
+                        Object[] options = {"Restart", "Cancel"};
+                        // Build a JOptionPane and a dialog so we can force always-on-top and modality on the EDT.
+                        JOptionPane pane = new JOptionPane(
+                                "Mcheli Loader installed successfully.\nClick Restart to close the game and install.\n(Seriously: restart the game.)",
+                                JOptionPane.INFORMATION_MESSAGE,
+                                JOptionPane.DEFAULT_OPTION,
+                                null,
+                                options,
+                                options[0]
+                        );
+                        JDialog dlg = pane.createDialog(null, "Mcheli Loader");
+                        dlg.setModal(true);
+                        dlg.setAlwaysOnTop(true);
+                        dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+                        dlg.setVisible(true); // blocks until user picks
+                        Object val = pane.getValue();
+                        if (val == null) {
+                            choice[0] = 1;
+                        } else if (val.equals(options[0])) {
+                            choice[0] = 0;
+                        } else {
+                            choice[0] = 1;
+                        }
+                    });
+                } catch (Exception e) {
+                    // If we can't show the dialog on EDT, fail loudly so you can see the problem in logs.
+                    throw new RuntimeException("Failed to show restart dialog", e);
+                }
+
+                if (choice[0] == 0) {
+                    // User explicitly requested restart — crash to force restart (same behavior you wanted).
                     throw new RuntimeException("Mcheli Loader installed. Please restart your game.");
                 } else {
                     LOGGER.info("User chose not to restart now.");
                 }
             } else {
-                // Not installed and not aborted -> something went wrong (shouldn't happen because worker sets flags)
                 throw new RuntimeException("Mcheli Loader not installed; see logs above.");
             }
         } catch (IOException e) {
