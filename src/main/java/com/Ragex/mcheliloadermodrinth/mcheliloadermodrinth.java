@@ -1,4 +1,4 @@
-package com.Ragex.mcheliloader;
+package com.Ragex.mcheliloadermodrinth;
 
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
