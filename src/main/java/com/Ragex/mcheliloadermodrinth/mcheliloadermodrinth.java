@@ -187,18 +187,19 @@ public class mcheliloadermodrinth {
             Files.deleteIfExists(dest);
             existing = 0L;
             downloadToFileWithResume(url, dest, expectedSize, bar);
+            return;
         }
         if (!resume && code != 200) {
             throw new IOException("Unexpected HTTP status " + code + " for download");
         }
 
         // Write stream to file (append if resuming)
-        try (InputStream in = new BufferedInputStream(c.getInputStream(), 8 * 1024 * 1024);
+        try (InputStream in = new BufferedInputStream(c.getInputStream(), 1 * 1024 * 1024); // 1 MB buffer
              RandomAccessFile raf = new RandomAccessFile(dest.toFile(), "rw")) {
 
             if (existing > 0) raf.seek(existing);
 
-            byte[] buffer = new byte[8 * 1024 * 1024];
+            byte[] buffer = new byte[1 * 1024 * 1024]; // 1 MB buffer
             long downloaded = existing;
             int n;
             long sinceFlush = 0L;
@@ -208,7 +209,7 @@ public class mcheliloadermodrinth {
                 downloaded += n;
                 sinceFlush += n;
 
-                if (expectedSize > 0) {
+                if (expectedSize > 0 && bar != null) {
                     final int p = (int) ((downloaded * 100) / expectedSize);
                     SwingUtilities.invokeLater(() -> {
                         bar.setIndeterminate(false);
@@ -217,19 +218,20 @@ public class mcheliloadermodrinth {
                     });
                 }
 
-                // Flush to disk every ~32MB to be safe with giant files
-                if (sinceFlush >= 32L * 1024L * 1024L) {
+                // Flush every 8 MB instead of 32 MB
+                if (sinceFlush >= 8L * 1024L * 1024L) {
                     raf.getFD().sync();
                     sinceFlush = 0L;
                 }
             }
 
-            // Final fsync to ensure data hits disk
+            // Final fsync to ensure all data hits disk
             raf.getFD().sync();
         } finally {
             c.disconnect();
         }
     }
+
 
     // === Validation helpers ===
 
